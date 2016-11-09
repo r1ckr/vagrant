@@ -1,10 +1,10 @@
 #Vagrantfiles
 
-#multi-machine
+##multi-machine
 This is to spin up multiple VMs with the same Vagrantfile
 
-#devbox
+##devbox
 This one is to spin up a devbox
 
-#sandbox
+##sandbox
 To play around
