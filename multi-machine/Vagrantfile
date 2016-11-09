@@ -1,0 +1,48 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# All Vagrant configuration is done below. The "2" in Vagrant.configure
+# configures the configuration version (we support older styles for
+# backwards compatibility). Please don't change it unless you know what
+# you're doing.
+Vagrant.configure("2") do |config|
+
+  #This is to get rid of the error: stdin: is not a tty
+  config.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'"
+
+  #This affects all the VMs
+  config.vm.provision "shell", inline: <<-SHELL
+    echo Installing Nginx...
+    sudo apt-get -y install nginx
+    echo Installing Docker...
+    sudo apt-get -y install apt-transport-https ca-certificates
+    sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+    echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" | sudo tee /etc/apt/sources.list.d/docker.list
+    sudo apt-get update
+    apt-cache policy docker-engine
+    sudo apt-get -y install linux-image-extra-$(uname -r) linux-image-extra-virtual
+    sudo apt-get -y install docker-engine
+    echo Starting Docker...
+    sudo service docker start
+    echo Setting permissions for docker group...
+    sudo usermod -aG docker vagrant
+  SHELL
+
+  #This affects Ubuntu01 only
+  config.vm.define "ubuntu01" do |ubuntu01|
+    ubuntu01.vm.box = "ubuntu/trusty64"
+    ubuntu01.vm.network "private_network", ip: "192.167.200.101"
+    ubuntu01.vm.hostname = "ubuntu01"
+  end
+
+  #This affects Ubuntu02 only
+  config.vm.define "ubuntu02" do |ubuntu02|
+    ubuntu02.vm.box = "ubuntu/trusty64"
+    ubuntu02.vm.network "private_network", ip: "192.167.200.102"
+    ubuntu02.vm.hostname = "ubuntu02"
+    ubuntu02.vm.provision "shell", inline: <<-SHELL
+      echo This should be only in ubuntu02
+      echo something >> /home/vagrant/test
+    SHELL
+  end
+end

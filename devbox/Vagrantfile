@@ -1,0 +1,38 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+# All Vagrant configuration is done below. The "2" in Vagrant.configure
+# configures the configuration version (we support older styles for
+# backwards compatibility). Please don't change it unless you know what
+# you're doing.
+Vagrant.configure("2") do |config|
+  
+  config.vm.box = "ubuntu/trusty64"
+  config.vm.network "private_network", ip: "99.99.99.99"
+  config.vm.hostname = "devbox"
+
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 2048
+    v.cpus = 2
+  end
+
+  #This is to get rid of the error: stdin: is not a tty
+  config.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'"
+
+  #This affects all the VMs
+  config.vm.provision "shell", inline: <<-SHELL
+    echo Installing Docker...
+    sudo apt-get -y install apt-transport-https ca-certificates
+    sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
+    echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" | sudo tee /etc/apt/sources.list.d/docker.list
+    sudo apt-get update
+    apt-cache policy docker-engine
+    sudo apt-get -y install linux-image-extra-$(uname -r) linux-image-extra-virtual
+    sudo apt-get -y install docker-engine
+    echo Starting Docker...
+    sudo service docker start
+    echo Setting permissions for docker group...
+    sudo usermod -aG docker vagrant
+    echo Docker installed!
+  SHELL
+end
