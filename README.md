@@ -9,6 +9,9 @@ This one is to spin up a devbox
 ##sandbox
 To play around
 
+##minio
+Testing a minio cluster of 4 nodes
+
 ##Vagrantv utils
 cd <project>
 vagrant up

@@ -1,0 +1,50 @@
+$script = <<-SCRIPT
+    echo I am provisioning...
+    date > /etc/vagrant_provisioned_at
+  SCRIPT
+
+Vagrant.configure("2") do |config|
+
+  #This is to get rid of the error: stdin: is not a tty
+  config.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'"
+
+  #VM settings
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 1024
+    v.cpus = 1
+  end
+
+  #Data 01
+  config.vm.define "data01" do |data01|
+    data01.vm.box = "ubuntu/xenial64"
+    data01.vm.network "private_network", ip: "192.167.201.101"
+    data01.vm.hostname = "data01"
+    data01.vm.synced_folder "data01/", "/data"
+    data01.vm.provision "docker"
+  end
+
+  #Data02
+  config.vm.define "data02" do |data02|
+    data02.vm.box = "ubuntu/xenial64"
+    data02.vm.network "private_network", ip: "192.167.201.102"
+    data02.vm.hostname = "data02"
+    data02.vm.synced_folder "data02/", "/data"
+  end
+
+  #Data03
+  config.vm.define "data03" do |data03|
+    data03.vm.box = "ubuntu/xenial64"
+    data03.vm.network "private_network", ip: "192.167.201.103"
+    data03.vm.hostname = "data03"
+    data03.vm.synced_folder "data03/", "/data"
+  end
+
+  #Data04
+  config.vm.define "data04" do |data04|
+    data04.vm.box = "ubuntu/xenial64"
+    data04.vm.network "private_network", ip: "192.167.201.104"
+    data04.vm.hostname = "data04"
+    data04.vm.synced_folder "data04/", "/data"
+  end
+
+end
