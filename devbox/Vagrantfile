@@ -2,7 +2,10 @@
 # vi: set ft=ruby :
 
 $script = <<-SCRIPT
-    echo I am provisioning...
+    echo "Installing Docker..."
+    sudo apt -y install docker.io
+    echo "adding current user to docker..."
+    sudo usermod -aG docker ubuntu
     date > /etc/vagrant_provisioned_at
   SCRIPT
 
@@ -11,7 +14,7 @@ Vagrant.configure("2") do |config|
   config.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'"
 
   #Image name
-  config.vm.box = "ubuntu/trusty64"
+  config.vm.box = "ubuntu/xenial64"
 
   #Network
   config.vm.network "private_network", ip: "99.99.99.99"
@@ -30,10 +33,5 @@ Vagrant.configure("2") do |config|
 
   #Inline script
   config.vm.provision "shell", inline: $script
-
-  #Installing Docker
-  config.vm.provision "docker" do |d|
-
-  end
 
 end
