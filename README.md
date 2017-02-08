@@ -13,7 +13,7 @@ To play around
 Testing a minio cluster of 4 nodes
 
 ##Vagrantv utils
-cd <project>
-vagrant up
-vagrant reload --provision
-vagrant destroy
+cd `<project>`  
+vagrant up  
+vagrant reload --provision  
+vagrant destroy  
