@@ -1,5 +1,11 @@
 $script = <<-SCRIPT
-    echo I am provisioning...
+    echo "Installing Docker..."
+    sudo apt-get update
+    sudo apt -y install docker.io
+
+    echo "Adding current user to docker..."
+    sudo usermod -aG docker ubuntu
+
     date > /etc/vagrant_provisioned_at
   SCRIPT
 
@@ -11,40 +17,18 @@ Vagrant.configure("2") do |config|
   #VM settings
   config.vm.provider "virtualbox" do |v|
     v.memory = 1024
-    v.cpus = 1
+    v.cpus = 2
   end
 
-  #Data 01
-  config.vm.define "data01" do |data01|
-    data01.vm.box = "ubuntu/xenial64"
-    data01.vm.network "private_network", ip: "192.167.201.101"
-    data01.vm.hostname = "data01"
-    data01.vm.synced_folder "data01/", "/data"
-    data01.vm.provision "docker"
-  end
+  config.vm.box = "ubuntu/xenial64"
+  config.vm.provision "shell", inline: $script
 
-  #Data02
-  config.vm.define "data02" do |data02|
-    data02.vm.box = "ubuntu/xenial64"
-    data02.vm.network "private_network", ip: "192.167.201.102"
-    data02.vm.hostname = "data02"
-    data02.vm.synced_folder "data02/", "/data"
+  (1..3).each do |i|
+    config.vm.define "minio#{i}" do |node|
+      node.vm.network "private_network", ip: "192.167.201.10#{i}"
+      node.vm.synced_folder "data#{i}/", "/data", create: true
+      node.vm.provision "shell",
+        inline: "echo hello from node #{i}"
+    end
   end
-
-  #Data03
-  config.vm.define "data03" do |data03|
-    data03.vm.box = "ubuntu/xenial64"
-    data03.vm.network "private_network", ip: "192.167.201.103"
-    data03.vm.hostname = "data03"
-    data03.vm.synced_folder "data03/", "/data"
-  end
-
-  #Data04
-  config.vm.define "data04" do |data04|
-    data04.vm.box = "ubuntu/xenial64"
-    data04.vm.network "private_network", ip: "192.167.201.104"
-    data04.vm.hostname = "data04"
-    data04.vm.synced_folder "data04/", "/data"
-  end
-
 end
