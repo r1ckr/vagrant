@@ -15,8 +15,8 @@ docker run -d --name minio \
 --net=host \
 -e "MINIO_ACCESS_KEY=O9RGDJAYKPPIRUS7F6K2" \
 -e "MINIO_SECRET_KEY=AUagMf7zIuzTd9ZAeXmS658VY8R4DKdVaKnt9w3j" \
--v /mnt/export/minio:/export \
--v /mnt/config/minio:/root/.minio \
+-v /data/export/minio:/export \
+-v /data/config/minio:/root/.minio \
 minio/minio server http://192.167.201.101/export http://192.167.201.102/export http://192.167.201.103/export http://192.167.201.104/export
 
 date > /etc/vagrant_provisioned_at
