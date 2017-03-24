@@ -1,48 +1,32 @@
-# -*- mode: ruby -*-
-# vi: set ft=ruby :
+ENV["LC_ALL"] = "en_US.UTF-8"
 
-# All Vagrant configuration is done below. The "2" in Vagrant.configure
-# configures the configuration version (we support older styles for
-# backwards compatibility). Please don't change it unless you know what
-# you're doing.
 Vagrant.configure("2") do |config|
 
   #This is to get rid of the error: stdin: is not a tty
   config.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'"
 
-  #This affects all the VMs
-  config.vm.provision "shell", inline: <<-SHELL
-    echo Installing Nginx...
-    sudo apt-get -y install nginx
-    echo Installing Docker...
-    sudo apt-get -y install apt-transport-https ca-certificates
-    sudo apt-key adv --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 58118E89F3A912897C070ADBF76221572C52609D
-    echo "deb https://apt.dockerproject.org/repo ubuntu-trusty main" | sudo tee /etc/apt/sources.list.d/docker.list
-    sudo apt-get update
-    apt-cache policy docker-engine
-    sudo apt-get -y install linux-image-extra-$(uname -r) linux-image-extra-virtual
-    sudo apt-get -y install docker-engine
-    echo Starting Docker...
-    sudo service docker start
-    echo Setting permissions for docker group...
-    sudo usermod -aG docker vagrant
-  SHELL
-
-  #This affects Ubuntu01 only
-  config.vm.define "ubuntu01" do |ubuntu01|
-    ubuntu01.vm.box = "ubuntu/trusty64"
-    ubuntu01.vm.network "private_network", ip: "192.167.200.101"
-    ubuntu01.vm.hostname = "ubuntu01"
+  #VM settings
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 1536
+    v.cpus = 2
   end
 
-  #This affects Ubuntu02 only
-  config.vm.define "ubuntu02" do |ubuntu02|
-    ubuntu02.vm.box = "ubuntu/trusty64"
-    ubuntu02.vm.network "private_network", ip: "192.167.200.102"
-    ubuntu02.vm.hostname = "ubuntu02"
-    ubuntu02.vm.provision "shell", inline: <<-SHELL
-      echo This should be only in ubuntu02
-      echo something >> /home/vagrant/test
-    SHELL
+  config.vm.box = "ubuntu/xenial64"
+  config.vm.provision "shell", path: "setup.sh"
+
+  #Adding my own id_rsa key into the authorized_keys file
+  config.vm.provision "file", source: "~/.ssh/id_rsa.pub", destination: "/home/ubuntu/.ssh/me.pub"
+  config.vm.provision "shell", inline: "cat /home/ubuntu/.ssh/me.pub >> /home/ubuntu/.ssh/authorized_keys"
+
+  (1..3).each do |i|
+    # Adding each hostname into the hosts file of each VM (Don't judge :D)
+    config.vm.provision "shell", inline: "echo 192.167.200.10#{i} node#{i} >> /etc/hosts"
+    config.vm.define "node#{i}" do |node|
+      node.vm.network "private_network", ip: "192.167.200.10#{i}"
+      node.vm.synced_folder "data#{i}/", "/data", create: true
+      node.vm.hostname = "node#{i}"
+      node.vm.provision "shell",
+        inline: "echo #{i} is ready to rock!"
+    end
   end
 end

@@ -4,7 +4,7 @@
 This is to spin up multiple VMs with the same Vagrantfile
 
 ##devbox
-This one is to spin up a devbox
+This one is to start up a devbox VM used for quick dev checks
 
 ##sandbox
 To play around
@@ -12,7 +12,7 @@ To play around
 ##minio
 Testing a minio cluster of 4 nodes
 
-##Vagrantv utils
+##Vagrant utils
 cd `<project>`  
 vagrant up  
 vagrant reload --provision  
