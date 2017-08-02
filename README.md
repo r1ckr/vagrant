@@ -1,4 +1,4 @@
-# agrantfiles
+# Vagrantfiles
 
 ## multi-machine
 This is to spin up multiple VMs with the same Vagrantfile
