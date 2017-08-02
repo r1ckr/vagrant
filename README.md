@@ -1,18 +1,18 @@
-#Vagrantfiles
+# agrantfiles
 
-##multi-machine
+## multi-machine
 This is to spin up multiple VMs with the same Vagrantfile
 
-##devbox
+## devbox
 This one is to start up a devbox VM used for quick dev checks
 
-##sandbox
+## sandbox
 To play around
 
-##minio
+## minio
 Testing a minio cluster of 4 nodes
 
-##Vagrant utils
+## Vagrant utils
 cd `<project>`  
 vagrant up  
 vagrant reload --provision  
