@@ -1,0 +1,53 @@
+version: "2"
+services:
+  hellohttp:
+    image: r1ckr/http-hello:latest
+    networks:
+      - frontend
+    ports:
+      - 7777:7777
+
+  kongdatabase:
+    image: cassandra:3
+    volumes:
+      - db-data:/var/lib/cassandra
+    networks:
+      - backend
+
+  kong:
+    image: kong:latest
+    ports:
+      - 8000:8000
+      - 8443:8443
+      - 8001:8001
+      - 8444:8444
+      - 7946:7946
+      - 7946:7946/udp
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      - kongdatabase
+    restart: always
+    environment:
+      KONG_DATABASE: 'cassandra'
+      KONG_CASSANDRA_CONTACT_POINTS: 'kongdatabase'
+
+  nginx:
+    image: nginx:latest
+    mem_limit: 256m
+    ports:
+      - 9999:9999
+    networks:
+      - frontend
+    volumes:
+      - /src/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - hellohttp
+
+networks:
+  frontend:
+  backend:
+
+volumes:
+  db-data:
