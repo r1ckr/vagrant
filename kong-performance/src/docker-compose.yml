@@ -6,6 +6,9 @@ services:
       - frontend
     ports:
       - 7777:7777
+    environment:
+      SERVER_TOMCAT_ACCESSLOG_ENABLED: "true"
+      JAVA_TOOL_OPTIONS: "-Xmx512m"
 
   kongdatabase:
     image: cassandra:3
