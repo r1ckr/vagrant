@@ -25,7 +25,7 @@ $update_channel = "stable"
 $worker_count = 1
 $worker_vm_memory = 1024
 $etcd_count = 1
-$etcd_vm_memory = 512
+$etcd_vm_memory = 1024
 $vb_cpuexecutioncap = 100
 
 CONFIG = File.expand_path("config.rb")
@@ -57,6 +57,7 @@ end
 etcdIPs = [*1..$etcd_count].map{ |i| etcdIP(i) }
 initial_etcd_cluster = etcdIPs.map.with_index{ |ip, i| "e#{i+1}=http://#{ip}:2380" }.join(",")
 etcd_endpoints = etcdIPs.map.with_index{ |ip, i| "http://#{ip}:2379" }.join(",")
+master_ips = etcdIPs.map.with_index{ |ip, i| "#{ip}" }.join(",")
 
 # Generate root CA
 # system("mkdir -p ssl && ./../../lib/init-ssl-ca ssl") or abort ("failed generating SSL artifacts")
@@ -97,7 +98,6 @@ Vagrant.configure("2") do |config|
     config.vbguest.auto_update = false
   end
 
-
   (1..$etcd_count).each do |i|
     config.vm.define vm_name = "e%d" % i do |etcd|
 
@@ -111,6 +111,12 @@ Vagrant.configure("2") do |config|
 
       etcd_config_file = Tempfile.new('etcd_config', :binmode => true)
       etcd_config_file.write("#cloud-config\n#{data.to_yaml}")
+
+      # new_contents = etcd_config_file.gsub("_NODE_NAME", "#{i}")
+      # new_contents = etcd_config_file.gsub("_NODE_IP", "#{i}")
+      # new_contents = etcd_config_file.gsub("_ETCD_INITIAL_CLUSTER", "#{i}")
+      # etcd_config_file.write(new_contents)
+
       etcd_config_file.close
 
       etcd.vm.provider :virtualbox do |vb|
@@ -138,7 +144,20 @@ Vagrant.configure("2") do |config|
       etcd.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
       etcd.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
       etcd.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
-      
+
+      # Environment file
+      env_file = Tempfile.new('env_file', :binmode => true)
+      env_file.write("ETCD_ENDPOINTS=#{etcd_endpoints}\n")
+      env_file.write("ETCD_INITIAL_CLUSTER=#{initial_etcd_cluster}\n")
+      env_file.write("MASTER_NODES=#{master_ips}\n")
+      env_file.write("NODE_NAME=e#{i}\n") 
+      env_file.write("NODE_IP=#{etcdIP(i)}\n") 
+      env_file.close
+      config.vm.provision :file, :source => env_file, :destination => "/tmp/bootstrap.env"
+
+      etcd.vm.provision :file, :source => "master-install.sh", :destination => "/tmp/master-install.sh"
+      etcd.vm.provision :file, :source => "dashboard.yaml", :destination => "/tmp/dashboard.yaml"
+      etcd.vm.provision :shell, :inline => "chmod +x /tmp/master-install.sh && /tmp/master-install.sh", :privileged => true
     end
   end
 
@@ -179,6 +198,17 @@ Vagrant.configure("2") do |config|
       worker.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
       worker.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
       
+
+      # Environment file
+      env_file = Tempfile.new('env_file', :binmode => true)
+      env_file.write("MASTER_NODES=#{master_ips}\n")
+      env_file.write("NODE_NAME=w#{i}\n") 
+      env_file.write("NODE_IP=#{workerIP(i)}\n") 
+      env_file.close
+      config.vm.provision :file, :source => env_file, :destination => "/tmp/bootstrap.env"
+
+      worker.vm.provision :file, :source => "worker-install.sh", :destination => "/tmp/worker-install.sh"
+      worker.vm.provision :shell, :inline => "chmod +x /tmp/worker-install.sh && /tmp/worker-install.sh", :privileged => true
     end
   end
 

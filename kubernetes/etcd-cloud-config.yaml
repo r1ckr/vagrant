@@ -10,7 +10,6 @@ coreos:
     listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
     initial-advertise-peer-urls: http://$private_ipv4:2380
     listen-peer-urls: http://0.0.0.0:2380
-
   units:
   - name: etcd2.service
     command: start
@@ -21,3 +20,5 @@ coreos:
         [Service]
         ExecStartPre=/usr/bin/etcdctl set /coreos.com/network/config '{ "Network": "10.1.0.0/16" }'
     command: start
+
+      
