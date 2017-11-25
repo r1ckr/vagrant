@@ -1,0 +1,185 @@
+# -*- mode: ruby -*-
+# # vi: set ft=ruby :
+
+require 'fileutils'
+require 'open-uri'
+require 'tempfile'
+require 'yaml'
+
+Vagrant.require_version ">= 1.6.0"
+
+# Make sure the vagrant-ignition plugin is installed
+required_plugins = %w(vagrant-ignition)
+
+plugins_to_install = required_plugins.select { |plugin| not Vagrant.has_plugin? plugin }
+if not plugins_to_install.empty?
+  puts "Installing plugins: #{plugins_to_install.join(' ')}"
+  if system "vagrant plugin install #{plugins_to_install.join(' ')}"
+    exec "vagrant #{ARGV.join(' ')}"
+  else
+    abort "Installation of one or more plugins has failed. Aborting."
+  end
+end
+
+$update_channel = "stable"
+$worker_count = 1
+$worker_vm_memory = 1024
+$etcd_count = 1
+$etcd_vm_memory = 512
+$vb_cpuexecutioncap = 100
+
+CONFIG = File.expand_path("config.rb")
+if File.exist?(CONFIG)
+  require CONFIG
+end
+
+if $worker_vm_memory < 1024
+  puts "Workers should have at least 1024 MB of memory"
+end
+
+IGNITION_CONFIG_PATH = File.join(File.dirname(__FILE__), "config.ign")
+
+CONTROLLER_CLUSTER_IP="10.3.0.1"
+
+ETCD_CLOUD_CONFIG_PATH = File.expand_path("etcd-cloud-config.yaml")
+
+# CONTROLLER_CLOUD_CONFIG_PATH = File.expand_path("../generic/controller-install.sh")
+WORKER_CLOUD_CONFIG_PATH = File.expand_path("worker-cloud-config.yaml")
+
+def etcdIP(num)
+  return "172.17.4.#{num+50}"
+end
+
+def workerIP(num)
+  return "172.17.4.#{num+100}"
+end
+
+etcdIPs = [*1..$etcd_count].map{ |i| etcdIP(i) }
+initial_etcd_cluster = etcdIPs.map.with_index{ |ip, i| "e#{i+1}=http://#{ip}:2380" }.join(",")
+etcd_endpoints = etcdIPs.map.with_index{ |ip, i| "http://#{ip}:2379" }.join(",")
+
+# Generate root CA
+# system("mkdir -p ssl && ./../../lib/init-ssl-ca ssl") or abort ("failed generating SSL artifacts")
+
+# Generate admin key/cert
+# system("./../../lib/init-ssl ssl admin kube-admin") or abort("failed generating admin SSL artifacts")
+
+# def provisionMachineSSL(machine,certBaseName,cn,ipAddrs)
+#   tarFile = "ssl/#{cn}.tar"
+#   ipString = ipAddrs.map.with_index { |ip, i| "IP.#{i+1}=#{ip}"}.join(",")
+#   system("./../../lib/init-ssl ssl #{certBaseName} #{cn} #{ipString}") or abort("failed generating #{cn} SSL artifacts")
+#   machine.vm.provision :file, :source => tarFile, :destination => "/tmp/ssl.tar"
+#   machine.vm.provision :shell, :inline => "mkdir -p /etc/kubernetes/ssl && tar -C /etc/kubernetes/ssl -xf /tmp/ssl.tar", :privileged => true
+# end
+
+Vagrant.configure("2") do |config|
+
+ # always use Vagrants insecure key
+  config.ssh.insert_key = false
+  # forward ssh agent to easily ssh into the different machines
+  config.ssh.forward_agent = true
+
+  config.vm.box = "coreos-%s" % $update_channel
+  config.vm.box_version = ">= 1520.8.0"
+  config.vm.box_url = "http://%s.release.core-os.net/amd64-usr/current/coreos_production_vagrant_virtualbox.json" % $update_channel
+
+  config.vm.provider :virtualbox do |v|
+    # On VirtualBox, we don't have guest additions or a functional vboxsf
+    # in CoreOS, so tell Vagrant that so it can be smarter.
+    v.check_guest_additions = false
+    v.functional_vboxsf     = false
+    # enable ignition (this is always done on virtualbox as this is how the ssh key is added to the system)
+    config.ignition.enabled = true
+  end
+
+  # plugin conflict
+  if Vagrant.has_plugin?("vagrant-vbguest") then
+    config.vbguest.auto_update = false
+  end
+
+
+  (1..$etcd_count).each do |i|
+    config.vm.define vm_name = "e%d" % i do |etcd|
+
+      config.vm.hostname = vm_name
+
+      data = YAML.load(IO.readlines(ETCD_CLOUD_CONFIG_PATH)[1..-1].join)
+      data['coreos']['etcd2']['initial-cluster'] = initial_etcd_cluster
+      data['coreos']['etcd2']['name'] = vm_name
+      data['coreos']['etcd2']['advertise-client-urls'] = "http://"+etcdIP(i)+":2379"
+      data['coreos']['etcd2']['initial-advertise-peer-urls'] = "http://"+etcdIP(i)+":2380"
+
+      etcd_config_file = Tempfile.new('etcd_config', :binmode => true)
+      etcd_config_file.write("#cloud-config\n#{data.to_yaml}")
+      etcd_config_file.close
+
+      etcd.vm.provider :virtualbox do |vb|
+        vb.memory = $etcd_vm_memory
+        vb.customize ["modifyvm", :id, "--cpuexecutioncap", "#{$vb_cpuexecutioncap}"]
+        config.ignition.config_obj = vb
+      end
+
+      etcd.vm.provider :virtualbox do |vb|
+        config.ignition.hostname = vm_name
+        config.ignition.drive_name = "config" + i.to_s
+        # when the ignition config doesn't exist, the plugin automatically generates a very basic Ignition with the ssh key
+        # and previously specified options (ip and hostname). Otherwise, it appends those to the provided config.ign below
+        if File.exist?(IGNITION_CONFIG_PATH)
+          config.ignition.path = 'config.ign'
+        end
+      end
+
+      etcd.vm.network :private_network, ip: etcdIP(i)
+
+      etcd.ignition.ip = etcdIP(i)
+      etcd.ignition.hostname = vm_name
+
+      etcd.vm.provision :file, :source => etcd_config_file.path, :destination => "/tmp/vagrantfile-user-data"
+      etcd.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
+      etcd.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
+      etcd.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
+      
+    end
+  end
+
+  (1..$worker_count).each do |i|
+    config.vm.define vm_name = "w%d" % i do |worker|
+      worker.vm.hostname = vm_name
+
+      data = YAML.load(IO.readlines(WORKER_CLOUD_CONFIG_PATH)[1..-1].join)
+      data['coreos']['etcd2']['initial-cluster'] = initial_etcd_cluster
+      
+      worker_config_file = Tempfile.new('worker_config', :binmode => true)
+      worker_config_file.write("#cloud-config\n#{data.to_yaml}")
+      worker_config_file.close
+
+      worker.vm.provider :virtualbox do |vb|
+        vb.memory = $worker_vm_memory
+        vb.customize ["modifyvm", :id, "--cpuexecutioncap", "#{$vb_cpuexecutioncap}"]
+        config.ignition.config_obj = vb
+      end
+
+      worker.vm.provider :virtualbox do |vb|
+        config.ignition.hostname = vm_name
+        config.ignition.drive_name = "worker-config" + i.to_s
+        # when the ignition config doesn't exist, the plugin automatically generates a very basic Ignition with the ssh key
+        # and previously specified options (ip and hostname). Otherwise, it appends those to the provided config.ign below
+        if File.exist?(IGNITION_CONFIG_PATH)
+          config.ignition.path = 'config.ign'
+        end
+      end
+
+      worker.vm.network :private_network, ip: etcdIP(i)
+
+      worker.ignition.ip = workerIP(i)
+      worker.ignition.hostname = vm_name
+
+      worker.vm.provision :file, :source => worker_config_file.path, :destination => "/tmp/vagrantfile-user-data"
+      worker.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
+      worker.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
+      worker.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
+      
+    end
+  end
+
+end
