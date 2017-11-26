@@ -1,3 +1,5 @@
+#!/bin/bash
+
 if [ -f "/tmp/bootstrap.env" ]; then
 	source "/tmp/bootstrap.env"
 else
@@ -102,7 +104,7 @@ ExecStartPre=/usr/bin/mkdir -p /var/log/containers
 ExecStart=/opt/bin/kubelet \
 --address=0.0.0.0 \
 --hostname-override=${NODE_IP} \
---api-servers=${MASTER_API_NODES} \
+--require-kubeconfig=true \
 --healthz-bind-address=0.0.0.0 \
 --cluster-dns=${DNS_SERVICE_IP} \
 --cluster-domain=kubernetes.local \

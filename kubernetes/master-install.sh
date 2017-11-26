@@ -65,7 +65,7 @@ docker run -d \
 
 #### Downloading Kubernetes ####
 
-export K8S_VERSION=v1.7.9
+export K8S_VERSION=v1.8.4
 export ARCH=amd64
 export CLUSTER_NAME=local
 # This is the Flannel network
@@ -141,7 +141,7 @@ ExecStartPre=/usr/bin/mkdir -p /var/log/containers
 ExecStart=/opt/bin/kubelet \
 --address=0.0.0.0 \
 --hostname-override=${NODE_IP} \
---api-servers=http://${MASTER_IP}:8080 \
+--require-kubeconfig=true \
 --healthz-bind-address=0.0.0.0 \
 --cluster-dns=${DNS_SERVICE_IP} \
 --cluster-domain=kubernetes.local \
