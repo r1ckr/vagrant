@@ -46,22 +46,44 @@ MASTER_IP=${NODE_IP}
 MASTER_API_NODES="http://$(echo $MASTER_NODES | sed "s/,/:8080,http:\/\//g"):8080"
 
 
-
-echo "Starting etcd..."
+echo "Starting Kube etcd..."
 ### Run ETCD:
-mkdir -p /var/etcd-data
-docker run -d \
+
+cat > /etc/systemd/system/kube-etcd.service <<- EOF
+[Unit]
+Description=etcd cluster for Kubernetes
+After=docker.service
+Requires=docker.service
+[Service]
+Restart=on-failure
+RestartSec=20
+TimeoutStartSec=60
+RemainAfterExit=yes
+ExecStartPre=-/usr/bin/docker stop kube-etcd
+ExecStartPre=-/usr/bin/docker rm kube-etcd
+ExecStartPre=/usr/bin/docker pull gcr.io/google-containers/etcd:3.0.17
+ExecStart=/usr/bin/docker run --name kube-etcd \
   --net=host \
-  --restart=always \
   --volume=/var/etcd-data:/etcd-data \
-  --name etcd gcr.io/google-containers/etcd:3.0.17 \
+  gcr.io/google-containers/etcd:3.0.17 \
   /usr/local/bin/etcd \
   --data-dir=/etcd-data --name ${NODE_NAME} \
   --initial-advertise-peer-urls http://${NODE_IP}:2390 \
   --listen-peer-urls http://0.0.0.0:2390 \
   --advertise-client-urls http://${NODE_IP}:2389 \
   --listen-client-urls http://0.0.0.0:2389 \
-  --initial-cluster ${ETCD_INITIAL_CLUSTER}
+  --initial-cluster "${ETCD_INITIAL_CLUSTER}"
+ExecStop=/usr/bin/docker stop kube-etcd
+ExecStop=/usr/bin/docker rm kube-etcd
+[Install]
+WantedBy=multi-user.target
+EOF
+
+echo "Starting Kube etcd..."
+systemctl daemon-reload
+systemctl enable kube-etcd
+systemctl start kube-etcd.service
+
 
 
 #### Downloading Kubernetes ####
