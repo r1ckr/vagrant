@@ -52,6 +52,7 @@ echo "Starting etcd..."
 mkdir -p /var/etcd-data
 docker run -d \
   --net=host \
+  --restart=always \
   --volume=/var/etcd-data:/etcd-data \
   --name etcd gcr.io/google-containers/etcd:3.0.17 \
   /usr/local/bin/etcd \
