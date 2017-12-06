@@ -1,0 +1,15 @@
+#cloud-config
+coreos:
+  update:
+    reboot-strategy: "etcd-lock"
+  etcd2:
+    proxy: on
+    initial-cluster: {{ETCD_INITIAL_CLUSTER}}
+    listen-client-urls: http://0.0.0.0:2379
+  locksmith:
+    group: "worker"
+    window-start: Mon 9:00
+    window-length: 1h
+  units:
+    - name: etcd2.service
+      command: start

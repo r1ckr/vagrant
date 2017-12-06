@@ -18,9 +18,9 @@ if [ -z "${ETCD_INITIAL_CLUSTER}" ]; then
 	ETCD_INITIAL_CLUSTER="$(hosname)=http://127.0.0.1:2380"
 fi
 
-if [ -z "${MASTER_NODES}" ]; then
-	echo "MASTER_NODES variable not found, setting to default 127.0.0.1"
-	MASTER_NODES="127.0.0.1"
+if [ -z "${MASTER_NODE}" ]; then
+	echo "MASTER_NODE variable not found, setting to default 127.0.0.1"
+	MASTER_NODE="127.0.0.1"
 fi
 
 if [ -z "${NODE_NAME}" ]; then
@@ -35,15 +35,15 @@ fi
 
 
 ## Changing default ports to not collide with CoreOS etcd
-ETCD_ENDPOINTS="${ETCD_ENDPOINTS/2379/2389}"
-ETCD_INITIAL_CLUSTER="${ETCD_INITIAL_CLUSTER/2380/2390}"
+ETCD_ENDPOINTS="${ETCD_ENDPOINTS//2379/2389}"
+ETCD_INITIAL_CLUSTER="${ETCD_INITIAL_CLUSTER//2380/2390}"
 
 # Since this is a master node we are setting the master IP to itself
 MASTER_IP=${NODE_IP}
 
 
 # We are transforming "172.17.4.51,172.17.4.52" to "http://172.17.4.51:8080,http://172.17.4.52:8080"
-MASTER_API_NODES="http://$(echo $MASTER_NODES | sed "s/,/:8080,http:\/\//g"):8080"
+MASTER_API_NODE="http://${MASTER_NODE}:8080"
 
 
 echo "Starting Kube etcd..."
@@ -133,7 +133,7 @@ clusters:
 - name: local
   cluster:
     insecure-skip-tls-verify: true
-    server: ${MASTER_API_NODES}
+    server: ${MASTER_API_NODE}
 contexts:
 - context:
     cluster: local
@@ -187,7 +187,7 @@ Requires=docker.service
 After=docker.service
 [Service]
 ExecStart=/opt/bin/kube-proxy \
---master=http://${MASTER_IP}:8080
+--master=${MASTER_API_NODE}
 Restart=always
 RestartSec=10
 [Install]
@@ -294,7 +294,7 @@ cat > /etc/kubernetes/manifests/kube-scheduler.json <<- EOF
         "command": [
           "/hyperkube",
           "scheduler",
-          "--master=${MASTER_IP}:8080"
+          "--master=127.0.0.1:8080"
         ],
         "livenessProbe": {
           "httpGet": {
@@ -384,3 +384,5 @@ systemctl start kube-proxy.service
 
 # After this we can create the dashboard:
 # kubectl create -f /tmp/dashboard.yaml
+# get the node where the dashboard is running:
+# kubectl get pods 

@@ -22,10 +22,15 @@ if not plugins_to_install.empty?
 end
 
 $update_channel = "stable"
+# ETCD are the nodes holding the ETCD for CoreOS
+$etcd_count = 1
+$etcd_vm_memory = 512
+# Master nodes will have the kube-etcd, API Server, scheduler and Kube controller
+$master_count = 1
+$master_vm_memory = 1024
+# Woker nodes will have only kubelet and kube-proxy
 $worker_count = 1
 $worker_vm_memory = 1024
-$etcd_count = 1
-$etcd_vm_memory = 1024
 $vb_cpuexecutioncap = 100
 
 CONFIG = File.expand_path("config.rb")
@@ -43,11 +48,17 @@ CONTROLLER_CLUSTER_IP="10.3.0.1"
 
 ETCD_CLOUD_CONFIG_PATH = File.expand_path("etcd-cloud-config.yaml")
 
+MASTER_CLOUD_CONFIG_PATH = File.expand_path("master-cloud-config.yaml")
+
 # CONTROLLER_CLOUD_CONFIG_PATH = File.expand_path("../generic/controller-install.sh")
 WORKER_CLOUD_CONFIG_PATH = File.expand_path("worker-cloud-config.yaml")
 
 def etcdIP(num)
-  return "172.17.4.#{num+50}"
+  return "172.17.4.#{num+10}"
+end
+
+def masterIP(num)
+  return "172.17.4.#{num+20}"
 end
 
 def workerIP(num)
@@ -55,12 +66,14 @@ def workerIP(num)
 end
 
 etcdIPs = [*1..$etcd_count].map{ |i| etcdIP(i) }
+masterIPs = [*1..$master_count].map{ |i| masterIP(i) }
 initial_etcd_cluster = etcdIPs.map.with_index{ |ip, i| "e#{i+1}=http://#{ip}:2380" }.join(",")
-etcd_endpoints = etcdIPs.map.with_index{ |ip, i| "http://#{ip}:2379" }.join(",")
-master_ips = etcdIPs.map.with_index{ |ip, i| "#{ip}" }.join(",")
+kube_initial_etcd_cluster = masterIPs.map.with_index{ |ip, i| "e#{i+1}=http://#{ip}:2390" }.join(",")
+kube_etcd_endpoints = masterIPs.map.with_index{ |ip, i| "http://#{ip}:2389" }.join(",")
+master_ip = masterIP(1)
 
 # Generate root CA
-# system("mkdir -p ssl && ./../../lib/init-ssl-ca ssl") or abort ("failed generating SSL artifacts")
+# system("mkdir -p ssl && ./init-ssl-ca.sh CONTROLLER_CLUSTER_IP,<master IPS cluster IP>") or abort ("failed generating SSL artifacts")
 
 # Generate admin key/cert
 # system("./../../lib/init-ssl ssl admin kube-admin") or abort("failed generating admin SSL artifacts")
@@ -109,15 +122,15 @@ Vagrant.configure("2") do |config|
       data['coreos']['etcd2']['advertise-client-urls'] = "http://"+etcdIP(i)+":2379"
       data['coreos']['etcd2']['initial-advertise-peer-urls'] = "http://"+etcdIP(i)+":2380"
 
-      etcd_config_file = Tempfile.new('etcd_config', :binmode => true)
-      etcd_config_file.write("#cloud-config\n#{data.to_yaml}")
+      config_file = Tempfile.new('etcd_config', :binmode => true)
+      config_file.write("#cloud-config\n#{data.to_yaml}")
 
-      # new_contents = etcd_config_file.gsub("_NODE_NAME", "#{i}")
-      # new_contents = etcd_config_file.gsub("_NODE_IP", "#{i}")
-      # new_contents = etcd_config_file.gsub("_ETCD_INITIAL_CLUSTER", "#{i}")
-      # etcd_config_file.write(new_contents)
+      # new_contents = config_file.gsub("_NODE_NAME", "#{i}")
+      # new_contents = config_file.gsub("_NODE_IP", "#{i}")
+      # new_contents = config_file.gsub("_ETCD_INITIAL_CLUSTER", "#{i}")
+      # config_file.write(new_contents)
 
-      etcd_config_file.close
+      config_file.close
 
       etcd.vm.provider :virtualbox do |vb|
         vb.memory = $etcd_vm_memory
@@ -127,7 +140,7 @@ Vagrant.configure("2") do |config|
 
       etcd.vm.provider :virtualbox do |vb|
         config.ignition.hostname = vm_name
-        config.ignition.drive_name = "config" + i.to_s
+        config.ignition.drive_name = "etcd-config" + i.to_s
         # when the ignition config doesn't exist, the plugin automatically generates a very basic Ignition with the ssh key
         # and previously specified options (ip and hostname). Otherwise, it appends those to the provided config.ign below
         if File.exist?(IGNITION_CONFIG_PATH)
@@ -140,24 +153,66 @@ Vagrant.configure("2") do |config|
       etcd.ignition.ip = etcdIP(i)
       etcd.ignition.hostname = vm_name
 
-      etcd.vm.provision :file, :source => etcd_config_file.path, :destination => "/tmp/vagrantfile-user-data"
+      etcd.vm.provision :file, :source => config_file.path, :destination => "/tmp/vagrantfile-user-data"
       etcd.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
       etcd.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
       etcd.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
 
+    end
+  end
+
+
+  (1..$master_count).each do |i|
+    config.vm.define vm_name = "m%d" % i do |master|
+
+      config.vm.hostname = vm_name
+
+      data = YAML.load(IO.readlines(WORKER_CLOUD_CONFIG_PATH)[1..-1].join)
+      data['coreos']['etcd2']['initial-cluster'] = initial_etcd_cluster
+      
+      config_file = Tempfile.new('master_config', :binmode => true)
+      config_file.write("#cloud-config\n#{data.to_yaml}")
+      config_file.close
+
+      master.vm.provider :virtualbox do |vb|
+        vb.memory = $master_vm_memory
+        vb.customize ["modifyvm", :id, "--cpuexecutioncap", "#{$vb_cpuexecutioncap}"]
+        config.ignition.config_obj = vb
+      end
+
+      master.vm.provider :virtualbox do |vb|
+        config.ignition.hostname = vm_name
+        config.ignition.drive_name = "master-config" + i.to_s
+        # when the ignition config doesn't exist, the plugin automatically generates a very basic Ignition with the ssh key
+        # and previously specified options (ip and hostname). Otherwise, it appends those to the provided config.ign below
+        if File.exist?(IGNITION_CONFIG_PATH)
+          config.ignition.path = 'config.ign'
+        end
+      end
+
+      master.vm.network :private_network, ip: masterIP(i)
+
+      master.ignition.ip = masterIP(i)
+      master.ignition.hostname = vm_name
+
+      master.vm.provision :file, :source => config_file.path, :destination => "/tmp/vagrantfile-user-data"
+      master.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
+      master.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
+      master.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
+
       # Environment file
       env_file = Tempfile.new('env_file', :binmode => true)
-      env_file.write("ETCD_ENDPOINTS=#{etcd_endpoints}\n")
-      env_file.write("ETCD_INITIAL_CLUSTER=#{initial_etcd_cluster}\n")
-      env_file.write("MASTER_NODES=#{master_ips}\n")
+      env_file.write("ETCD_ENDPOINTS=#{kube_etcd_endpoints}\n")
+      env_file.write("ETCD_INITIAL_CLUSTER=#{kube_initial_etcd_cluster}\n")
+      env_file.write("MASTER_NODE=#{master_ip}\n")
       env_file.write("NODE_NAME=e#{i}\n") 
-      env_file.write("NODE_IP=#{etcdIP(i)}\n") 
+      env_file.write("NODE_IP=#{masterIP(i)}\n") 
       env_file.close
       config.vm.provision :file, :source => env_file, :destination => "/tmp/bootstrap.env"
 
-      etcd.vm.provision :file, :source => "master-install.sh", :destination => "/tmp/master-install.sh"
-      etcd.vm.provision :file, :source => "dashboard.yaml", :destination => "/tmp/dashboard.yaml"
-      etcd.vm.provision :shell, :inline => "chmod +x /tmp/master-install.sh && /tmp/master-install.sh", :privileged => true
+      master.vm.provision :file, :source => "master-install.sh", :destination => "/tmp/master-install.sh"
+      master.vm.provision :file, :source => "dashboard.yaml", :destination => "/tmp/dashboard.yaml"
+      master.vm.provision :shell, :inline => "chmod +x /tmp/master-install.sh && /tmp/master-install.sh", :privileged => true
     end
   end
 
@@ -168,9 +223,9 @@ Vagrant.configure("2") do |config|
       data = YAML.load(IO.readlines(WORKER_CLOUD_CONFIG_PATH)[1..-1].join)
       data['coreos']['etcd2']['initial-cluster'] = initial_etcd_cluster
       
-      worker_config_file = Tempfile.new('worker_config', :binmode => true)
-      worker_config_file.write("#cloud-config\n#{data.to_yaml}")
-      worker_config_file.close
+      config_file = Tempfile.new('worker_config', :binmode => true)
+      config_file.write("#cloud-config\n#{data.to_yaml}")
+      config_file.close
 
       worker.vm.provider :virtualbox do |vb|
         vb.memory = $worker_vm_memory
@@ -193,7 +248,7 @@ Vagrant.configure("2") do |config|
       worker.ignition.ip = workerIP(i)
       worker.ignition.hostname = vm_name
 
-      worker.vm.provision :file, :source => worker_config_file.path, :destination => "/tmp/vagrantfile-user-data"
+      worker.vm.provision :file, :source => config_file.path, :destination => "/tmp/vagrantfile-user-data"
       worker.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
       worker.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
       worker.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
@@ -201,7 +256,7 @@ Vagrant.configure("2") do |config|
 
       # Environment file
       env_file = Tempfile.new('env_file', :binmode => true)
-      env_file.write("MASTER_NODES=#{master_ips}\n")
+      env_file.write("MASTER_NODE=#{master_ip}\n")
       env_file.write("NODE_NAME=w#{i}\n") 
       env_file.write("NODE_IP=#{workerIP(i)}\n") 
       env_file.close

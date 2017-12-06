@@ -7,9 +7,9 @@ else
 	exit 1
 fi
 
-if [ -z "${MASTER_NODES}" ]; then
-	echo "MASTER_NODES variable not found, setting to default 127.0.0.1"
-	MASTER_NODES="127.0.0.1"
+if [ -z "${MASTER_NODE}" ]; then
+	echo "MASTER_NODE variable not found, setting to default 127.0.0.1"
+	MASTER_NODE="127.0.0.1"
 fi
 
 if [ -z "${NODE_NAME}" ]; then
@@ -24,11 +24,11 @@ fi
 
 
 # We are transforming "172.17.4.51,172.17.4.52" to "http://172.17.4.51:8080,http://172.17.4.52:8080"
-MASTER_API_NODES="http://$(echo $MASTER_NODES | sed "s/,/:8080,http:\/\//g"):8080"
+MASTER_API_NODE="http://${MASTER_NODE}:8080"
 
 #### Downloading Kubernetes ####
 
-export K8S_VERSION=v1.7.9
+export K8S_VERSION=v1.8.4
 export ARCH=amd64
 export CLUSTER_NAME=local
 # This is the Flannel network
@@ -73,7 +73,7 @@ clusters:
 - name: local
   cluster:
     insecure-skip-tls-verify: true
-    server: ${MASTER_API_NODES}
+    server: ${MASTER_API_NODE}
 contexts:
 - context:
     cluster: local
@@ -127,7 +127,7 @@ Requires=docker.service
 After=docker.service
 [Service]
 ExecStart=/opt/bin/kube-proxy \
---master=${MASTER_API_NODES}
+--master=${MASTER_API_NODE}
 Restart=always
 RestartSec=10
 [Install]
