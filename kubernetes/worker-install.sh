@@ -110,6 +110,7 @@ ExecStart=/opt/bin/kubelet \
 --cluster-domain=kubernetes.local \
 --pod-manifest-path=/etc/kubernetes/manifests \
 --logtostderr=true \
+--node-labels=node-role.kubernetes.io/node="" \
 --v=2
 Restart=always
 RestartSec=10
