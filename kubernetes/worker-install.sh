@@ -22,11 +22,11 @@ if [ -z "${NODE_IP}" ]; then
 	NODE_IP=$(ip -4 -br addr show eth0 | awk '{print $3}' | cut -d"/" -f1)
 fi
 
-MASTER_API_NODE="http://${MASTER_NODE}:8080"
+MASTER_API_NODE="https://${MASTER_NODE}"
 
 #### Downloading Kubernetes ####
 
-export K8S_VERSION=v1.8.4
+export K8S_VERSION=v1.8.5
 export ARCH=amd64
 export CLUSTER_NAME=local
 # This is the Flannel network
@@ -70,7 +70,6 @@ users:
 clusters:
 - name: local
   cluster:
-    insecure-skip-tls-verify: true
     server: ${MASTER_API_NODE}
 contexts:
 - context:

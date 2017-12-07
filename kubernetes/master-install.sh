@@ -41,7 +41,7 @@ ETCD_INITIAL_CLUSTER="${ETCD_INITIAL_CLUSTER//2380/2390}"
 # Since this is a master node we are setting the master IP to itself
 MASTER_IP=${NODE_IP}
 
-MASTER_API_NODE="http://${MASTER_NODE}:8080"
+MASTER_API_NODE="https://${MASTER_NODE}"
 
 echo "Starting Kube etcd..."
 ### Run ETCD:
@@ -85,7 +85,7 @@ systemctl start kube-etcd.service
 
 #### Downloading Kubernetes ####
 
-export K8S_VERSION=v1.8.4
+export K8S_VERSION=v1.8.5
 export ARCH=amd64
 export CLUSTER_NAME=local
 # This is the Flannel network
@@ -129,7 +129,6 @@ users:
 clusters:
 - name: local
   cluster:
-    insecure-skip-tls-verify: true
     server: ${MASTER_API_NODE}
 contexts:
 - context:
@@ -216,10 +215,15 @@ cat > /etc/kubernetes/manifests/kube-api-server.json <<- EOF
           "apiserver",
           "--service-cluster-ip-range=${SERVICE_CLUSTER_IP_RANGE}",
           "--etcd-servers=http://${MASTER_IP}:2389",
-          "--token-auth-file=/dev/null",
-          "--insecure-bind-address=0.0.0.0",
+          "--insecure-bind-address=127.0.0.1",
+          "--anonymous-auth=true",
           "--advertise-address=${MASTER_IP}",
-          "--anonymous-auth=true"
+          "--bind-address=0.0.0.0",
+          "--secure-port=443",
+          "--client-ca-file=/etc/ssl/kube/ca.crt",
+          "--tls-cert-file=/etc/ssl/kube/server.crt",
+          "--tls-private-key-file=/etc/ssl/kube/server.key",
+          "--token-auth-file=/srv/kubernetes/token-auth-file.csv"
         ],
         "ports": [
           {

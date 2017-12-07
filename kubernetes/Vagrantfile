@@ -72,23 +72,14 @@ kube_initial_etcd_cluster = masterIPs.map.with_index{ |ip, i| "e#{i+1}=http://#{
 kube_etcd_endpoints = masterIPs.map.with_index{ |ip, i| "http://#{ip}:2389" }.join(",")
 master_ip = masterIP(1)
 
-# Generate root CA
-# system("mkdir -p ssl && ./init-ssl-ca.sh CONTROLLER_CLUSTER_IP,<master IPS cluster IP>") or abort ("failed generating SSL artifacts")
-
-# Generate admin key/cert
-# system("./../../lib/init-ssl ssl admin kube-admin") or abort("failed generating admin SSL artifacts")
-
-# def provisionMachineSSL(machine,certBaseName,cn,ipAddrs)
-#   tarFile = "ssl/#{cn}.tar"
-#   ipString = ipAddrs.map.with_index { |ip, i| "IP.#{i+1}=#{ip}"}.join(",")
-#   system("./../../lib/init-ssl ssl #{certBaseName} #{cn} #{ipString}") or abort("failed generating #{cn} SSL artifacts")
-#   machine.vm.provision :file, :source => tarFile, :destination => "/tmp/ssl.tar"
-#   machine.vm.provision :shell, :inline => "mkdir -p /etc/kubernetes/ssl && tar -C /etc/kubernetes/ssl -xf /tmp/ssl.tar", :privileged => true
-# end
+# Set cert envs
+local_pki_dir="easy-rsa-master/easyrsa3/pki"
+kube_ssl_dir="/etc/ssl/kube"
+kube_ssl_tmp_dir="/tmp/certs"
 
 Vagrant.configure("2") do |config|
 
- # always use Vagrants insecure key
+  # always use Vagrants insecure key
   config.ssh.insert_key = false
   # forward ssh agent to easily ssh into the different machines
   config.ssh.forward_agent = true
@@ -110,6 +101,10 @@ Vagrant.configure("2") do |config|
   if Vagrant.has_plugin?("vagrant-vbguest") then
     config.vbguest.auto_update = false
   end
+
+  # Generate root CA and certs
+  master_ips = masterIPs.map.with_index{ |ip, i| "#{ip}" }.join(",")
+  system("mkdir -p ssl && ./init-ssl-ca.sh #{CONTROLLER_CLUSTER_IP},#{master_ips}") or abort ("failed generating SSL artifacts")
 
   (1..$etcd_count).each do |i|
     config.vm.define vm_name = "e%d" % i do |etcd|
@@ -212,6 +207,22 @@ Vagrant.configure("2") do |config|
 
       master.vm.provision :file, :source => "master-install.sh", :destination => "/tmp/master-install.sh"
       master.vm.provision :file, :source => "dashboard.yaml", :destination => "/tmp/dashboard.yaml"
+
+      # Copying the certs for API Server:
+      master.vm.provision :shell, :inline => "mkdir -p #{kube_ssl_tmp_dir}", :privileged => false
+      master.vm.provision :file, :source => "#{local_pki_dir}/ca.crt", :destination => "#{kube_ssl_tmp_dir}/ca.crt"
+      master.vm.provision :file, :source => "#{local_pki_dir}/private/server.key", :destination => "#{kube_ssl_tmp_dir}/server.key"
+      master.vm.provision :file, :source => "#{local_pki_dir}/issued/server.crt", :destination => "#{kube_ssl_tmp_dir}/server.crt"
+      master.vm.provision :shell, :inline => "mkdir -p #{kube_ssl_dir} && cp #{kube_ssl_tmp_dir}/* #{kube_ssl_dir}/", :privileged => true
+
+      # Copying CA pem for clients
+      master.vm.provision :shell, :inline => "cp #{kube_ssl_tmp_dir}/ca.crt /etc/ssl/certs/kubernetes.pem && update-ca-certificates", :privileged => true
+
+
+      # Copying the token auth file
+      master.vm.provision :file, :source => "token-auth-file.csv", :destination => "/tmp/token-auth-file.csv"
+      master.vm.provision :shell, :inline => "mkdir -p /srv/kubernetes/ && cp /tmp/token-auth-file.csv /srv/kubernetes/token-auth-file.csv", :privileged => true
+
       master.vm.provision :shell, :inline => "chmod +x /tmp/master-install.sh && /tmp/master-install.sh", :privileged => true
     end
   end
@@ -261,6 +272,11 @@ Vagrant.configure("2") do |config|
       env_file.write("NODE_IP=#{workerIP(i)}\n") 
       env_file.close
       config.vm.provision :file, :source => env_file, :destination => "/tmp/bootstrap.env"
+
+      # Copying CA pem for clients
+      worker.vm.provision :shell, :inline => "mkdir -p #{kube_ssl_tmp_dir}", :privileged => false
+      worker.vm.provision :file, :source => "#{local_pki_dir}/ca.crt", :destination => "#{kube_ssl_tmp_dir}/ca.crt"
+      worker.vm.provision :shell, :inline => "cp #{kube_ssl_tmp_dir}/ca.crt /etc/ssl/certs/kubernetes.pem && update-ca-certificates", :privileged => true
 
       worker.vm.provision :file, :source => "worker-install.sh", :destination => "/tmp/worker-install.sh"
       worker.vm.provision :shell, :inline => "chmod +x /tmp/worker-install.sh && /tmp/worker-install.sh", :privileged => true
