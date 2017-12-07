@@ -54,15 +54,15 @@ MASTER_CLOUD_CONFIG_PATH = File.expand_path("master-cloud-config.yaml")
 WORKER_CLOUD_CONFIG_PATH = File.expand_path("worker-cloud-config.yaml")
 
 def etcdIP(num)
-  return "172.17.4.#{num+10}"
+  return "192.168.47.#{num+10}"
 end
 
 def masterIP(num)
-  return "172.17.4.#{num+20}"
+  return "192.168.47.#{num+20}"
 end
 
 def workerIP(num)
-  return "172.17.4.#{num+100}"
+  return "192.168.47.#{num+100}"
 end
 
 etcdIPs = [*1..$etcd_count].map{ |i| etcdIP(i) }
@@ -243,7 +243,7 @@ Vagrant.configure("2") do |config|
         end
       end
 
-      worker.vm.network :private_network, ip: etcdIP(i)
+      worker.vm.network :private_network, ip: workerIP(i)
 
       worker.ignition.ip = workerIP(i)
       worker.ignition.hostname = vm_name

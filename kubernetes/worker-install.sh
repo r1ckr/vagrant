@@ -22,8 +22,6 @@ if [ -z "${NODE_IP}" ]; then
 	NODE_IP=$(ip -4 -br addr show eth0 | awk '{print $3}' | cut -d"/" -f1)
 fi
 
-
-# We are transforming "172.17.4.51,172.17.4.52" to "http://172.17.4.51:8080,http://172.17.4.52:8080"
 MASTER_API_NODE="http://${MASTER_NODE}:8080"
 
 #### Downloading Kubernetes ####

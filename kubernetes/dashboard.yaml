@@ -100,7 +100,7 @@ spec:
         - containerPort: 9090
           protocol: TCP
         args: [
-          "--apiserver-host=http://172.17.4.21:8080"
+          "--apiserver-host=http://192.168.47.21:8080"
         ]
         volumeMounts:
           # Create on-disk volume to store exec logs

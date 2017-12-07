@@ -41,10 +41,7 @@ ETCD_INITIAL_CLUSTER="${ETCD_INITIAL_CLUSTER//2380/2390}"
 # Since this is a master node we are setting the master IP to itself
 MASTER_IP=${NODE_IP}
 
-
-# We are transforming "172.17.4.51,172.17.4.52" to "http://172.17.4.51:8080,http://172.17.4.52:8080"
 MASTER_API_NODE="http://${MASTER_NODE}:8080"
-
 
 echo "Starting Kube etcd..."
 ### Run ETCD:
