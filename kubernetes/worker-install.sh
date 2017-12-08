@@ -64,7 +64,7 @@ cat > ~/.kube/config <<- EOF
 apiVersion: v1
 kind: Config
 users:
-- name: kubelet
+- name: root
   user:
     token: ${TOKEN}
 clusters:
@@ -74,7 +74,7 @@ clusters:
 contexts:
 - context:
     cluster: local
-    user: kubelet
+    user: root
   name: service-account-context
 current-context: service-account-context
 preferences: {}

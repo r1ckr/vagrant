@@ -123,17 +123,17 @@ cat > ~/.kube/config <<- EOF
 apiVersion: v1
 kind: Config
 users:
-- name: kubelet
+- name: root
   user:
     token: ${TOKEN}
 clusters:
 - name: local
   cluster:
-    server: ${MASTER_API_NODE}
+    server: http://127.0.0.1:8080
 contexts:
 - context:
     cluster: local
-    user: kubelet
+    user: root
   name: service-account-context
 current-context: service-account-context
 preferences: {}
@@ -383,8 +383,37 @@ systemctl enable kube-proxy
 systemctl start kubelet.service
 systemctl start kube-proxy.service
 
+echo "Adding root user rolebinding..."
+kubectl create clusterrolebinding root-cluster-admin-binding --clusterrole=cluster-admin --user=root
 
-# After this we can create the dashboard:
-# kubectl create -f /tmp/dashboard.yaml
-# get the node where the dashboard is running:
-# kubectl get pods 
+echo "Creating config for the dashboard..."
+mkdir -p /srv/kubernetes/
+cat > /srv/kubernetes/kubeconfig <<- EOF
+apiVersion: v1
+kind: Config
+users:
+- name: root
+  user:
+    token: ${TOKEN}
+clusters:
+- name: local
+  cluster:
+    server: ${MASTER_API_NODE}
+contexts:
+- context:
+    cluster: local
+    user: root
+  name: service-account-context
+current-context: service-account-context
+preferences: {}
+EOF
+
+# Adding the token secret:
+echo -n ${TOKEN} > /tmp/token
+#kubectl create --namespace=kube-system secret generic api-token --from-file=/tmp/token
+#
+## After this we can create the dashboard:
+#kubectl create -f /tmp/dashboard.yaml
+#
+#echo "Kube cluster ready, kubeconfig is:"
+#cat /srv/kubernetes/kubeconfig
