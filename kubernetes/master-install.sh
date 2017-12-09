@@ -14,8 +14,8 @@ if [ -z "${ETCD_ENDPOINTS}" ]; then
 fi
 
 if [ -z "${ETCD_INITIAL_CLUSTER}" ]; then
-	echo "ETCD_INITIAL_CLUSTER variable not found, setting to default $(hosname)=http://127.0.0.1:2380"
-	ETCD_INITIAL_CLUSTER="$(hosname)=http://127.0.0.1:2380"
+	echo "ETCD_INITIAL_CLUSTER variable not found, setting to default $(hostname)=http://127.0.0.1:2380"
+	ETCD_INITIAL_CLUSTER="$(hostname)=http://127.0.0.1:2380"
 fi
 
 if [ -z "${MASTER_NODE}" ]; then
@@ -42,46 +42,6 @@ ETCD_INITIAL_CLUSTER="${ETCD_INITIAL_CLUSTER//2380/2390}"
 MASTER_IP=${NODE_IP}
 
 MASTER_API_NODE="https://${MASTER_NODE}"
-
-echo "Starting Kube etcd..."
-### Run ETCD:
-
-cat > /etc/systemd/system/kube-etcd.service <<- EOF
-[Unit]
-Description=etcd cluster for Kubernetes
-After=docker.service
-Requires=docker.service
-[Service]
-Restart=on-failure
-RestartSec=20
-TimeoutStartSec=60
-RemainAfterExit=yes
-ExecStartPre=-/usr/bin/docker stop kube-etcd
-ExecStartPre=-/usr/bin/docker rm kube-etcd
-ExecStartPre=/usr/bin/docker pull gcr.io/google-containers/etcd:3.0.17
-ExecStart=/usr/bin/docker run --name kube-etcd \
-  --net=host \
-  --volume=/var/etcd-data:/etcd-data \
-  gcr.io/google-containers/etcd:3.0.17 \
-  /usr/local/bin/etcd \
-  --data-dir=/etcd-data --name ${NODE_NAME} \
-  --initial-advertise-peer-urls http://${NODE_IP}:2390 \
-  --listen-peer-urls http://0.0.0.0:2390 \
-  --advertise-client-urls http://${NODE_IP}:2389 \
-  --listen-client-urls http://0.0.0.0:2389 \
-  --initial-cluster "${ETCD_INITIAL_CLUSTER}"
-ExecStop=/usr/bin/docker stop kube-etcd
-ExecStop=/usr/bin/docker rm kube-etcd
-[Install]
-WantedBy=multi-user.target
-EOF
-
-echo "Starting Kube etcd..."
-systemctl daemon-reload
-systemctl enable kube-etcd
-systemctl start kube-etcd.service
-
-
 
 #### Downloading Kubernetes ####
 
@@ -410,10 +370,3 @@ EOF
 
 # Adding the token secret:
 echo -n ${TOKEN} > /tmp/token
-#kubectl create --namespace=kube-system secret generic api-token --from-file=/tmp/token
-#
-## After this we can create the dashboard:
-#kubectl create -f /tmp/dashboard.yaml
-#
-#echo "Kube cluster ready, kubeconfig is:"
-#cat /srv/kubernetes/kubeconfig
