@@ -229,6 +229,7 @@ Vagrant.configure("2") do |config|
       master.vm.provision :file, :source => "token-auth-file.csv", :destination => "/tmp/token-auth-file.csv"
       master.vm.provision :shell, :inline => "mkdir -p /srv/kubernetes/ && cp /tmp/token-auth-file.csv /srv/kubernetes/token-auth-file.csv", :privileged => true
 
+      # Installing API Server, Controller and Scheduler
       master.vm.provision :shell, :inline => "chmod +x /tmp/master-install.sh && /tmp/master-install.sh", :privileged => true
     end
   end
