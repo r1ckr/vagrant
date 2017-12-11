@@ -1,16 +1,10 @@
 #!/bin/bash
 
-if [ -f "/tmp/bootstrap.env" ]; then
-	source "/tmp/bootstrap.env"
+if [ -f "/etc/kubernetes/bootstrap.env" ]; then
+	source "/etc/kubernetes/bootstrap.env"
 else
 	echo "Environment file not found"
 	exit 1
-fi
-
-
-if [ -z "${ETCD_ENDPOINTS}" ]; then
-	echo "ETCD_ENDPOINTS variable not found, setting to default http://127.0.0.1:2379"
-	ETCD_ENDPOINTS="http://127.0.0.1:2379"
 fi
 
 if [ -z "${MASTER_NODE}" ]; then
@@ -37,7 +31,7 @@ fi
 # Since this is a master node we are setting the master IP to itself
 MASTER_IP=${NODE_IP}
 
-MASTER_API_NODE="https://${MASTER_NODE}"
+MASTER_API_NODE="https://${NODE_IP}"
 
 #### Downloading Kubernetes ####
 
@@ -64,19 +58,20 @@ cat > /etc/kubernetes/manifests/kube-api-server.json <<- EOF
   "kind": "Pod",
   "apiVersion": "v1",
   "metadata": {
-    "name": "kube-apiserver"
+    "name": "kube-apiserver",
+    "namespace": "kube-system"
   },
   "spec": {
     "hostNetwork": true,
     "containers": [
       {
         "name": "kube-apiserver",
-        "image": "gcr.io/google-containers/hyperkube:v${K8S_VERSION}",
+        "image": "gcr.io/google-containers/hyperkube:${K8S_VERSION}",
         "command": [
           "/hyperkube",
           "apiserver",
           "--service-cluster-ip-range=${SERVICE_CLUSTER_IP_RANGE}",
-          "--etcd-servers=http://${MASTER_IP}:2389",
+          "--etcd-servers=http://127.0.0.1:2389",
           "--insecure-bind-address=127.0.0.1",
           "--anonymous-auth=true",
           "--advertise-address=${MASTER_IP}",
@@ -147,14 +142,15 @@ cat > /etc/kubernetes/manifests/kube-scheduler.json <<- EOF
   "kind": "Pod",
   "apiVersion": "v1",
   "metadata": {
-    "name": "kube-scheduler"
+    "name": "kube-scheduler",
+    "namespace": "kube-system"
   },
   "spec": {
     "hostNetwork": true,
     "containers": [
       {
         "name": "kube-scheduler",
-        "image": "gcr.io/google-containers/hyperkube:v${K8S_VERSION}",
+        "image": "gcr.io/google-containers/hyperkube:${K8S_VERSION}",
         "command": [
           "/hyperkube",
           "scheduler",
@@ -182,14 +178,15 @@ cat > /etc/kubernetes/manifests/kube-controller-manager.json <<- EOF
   "kind": "Pod",
   "apiVersion": "v1",
   "metadata": {
-    "name": "kube-controller-manager"
+    "name": "kube-controller-manager",
+    "namespace": "kube-system"
   },
   "spec": {
     "hostNetwork": true,
     "containers": [
       {
         "name": "kube-controller-manager",
-        "image": "gcr.io/google-containers/hyperkube:v${K8S_VERSION}",
+        "image": "gcr.io/google-containers/hyperkube:${K8S_VERSION}",
         "command": [
           "/hyperkube",
           "controller-manager",
@@ -247,27 +244,12 @@ done
 echo "Adding root user rolebinding..."
 kubectl create clusterrolebinding root-cluster-admin-binding --clusterrole=cluster-admin --user=root
 
-echo "Creating config for the dashboard..."
-mkdir -p /srv/kubernetes/
-cat > /srv/kubernetes/kubeconfig <<- EOF
-apiVersion: v1
-kind: Config
-users:
-- name: root
-  user:
-    token: ${TOKEN}
-clusters:
-- name: local
-  cluster:
-    server: ${MASTER_API_NODE}
-contexts:
-- context:
-    cluster: local
-    user: root
-  name: service-account-context
-current-context: service-account-context
-preferences: {}
-EOF
 
-# Adding the token secret:
+echo "Creating token file..."
 echo -n ${TOKEN} > /tmp/token
+
+echo "Creating secret from token file..."
+kubectl create --namespace=kube-system secret generic api-token --from-file=/tmp/token
+
+echo "Deploying dashboard..."
+kubectl create -f /tmp/dashboard.yaml

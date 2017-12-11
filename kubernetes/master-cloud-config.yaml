@@ -4,10 +4,15 @@ write_files:
     permissions: 0644
     owner: root
     content: |
-      K8S_VERSION=v1.8.5
-      ARCH=amd64
-      DNS_SERVICE_IP=10.3.0.10
-      TOKEN=T1XXVHXsJ3bNVpC66sXQcHYNnG8dAZRL
+      K8S_VERSION=_K8S_VERSION
+      ARCH=_ARCH
+      DNS_SERVICE_IP=_DNS_SERVICE_IP
+      TOKEN=_TOKEN
+      INITIAL_ETCD_KUBE_CLUSTER=_INITIAL_ETCD_KUBE_CLUSTER
+      ETCD_ENDPOINTS=_ETCD_ENDPOINTS
+      MASTER_NODE=_MASTER_NODE
+      NODE_NAME=_NODE_NAME
+      NODE_IP=_NODE_IP
   - path: "/root/download-kube.sh"
     permissions: "0755"
     owner: "root"
@@ -34,7 +39,7 @@ write_files:
       users:
       - name: root
         user:
-          token: ${TOKEN}
+          token: _TOKEN
       clusters:
       - name: local
         cluster:
@@ -50,14 +55,14 @@ write_files:
     permissions: 0644
     owner: root
     content: |
-      ${TOKEN},root,31ada4fd-adec-460c-809a-9e56ceb75269
+      _TOKEN,root,31ada4fd-adec-460c-809a-9e56ceb75269
 
 coreos:
   update:
     reboot-strategy: "etcd-lock"
   etcd2:
     proxy: on
-    initial-cluster: ETCD_INITIAL_CLUSTER
+    initial-cluster: _INITIAL_ETCD_CLUSTER
     listen-client-urls: http://0.0.0.0:2379
   locksmith:
     group: "worker"
@@ -74,6 +79,7 @@ coreos:
         After=docker.service
         Requires=docker.service
         [Service]
+        EnvironmentFile=/etc/kubernetes/bootstrap.env
         Restart=on-failure
         RestartSec=20
         TimeoutStartSec=60
@@ -86,12 +92,12 @@ coreos:
           --volume=/var/etcd-data:/etcd-data \
           gcr.io/google-containers/etcd:3.0.17 \
           /usr/local/bin/etcd \
-          --data-dir=/etcd-data --name NODE_NAME \
-          --initial-advertise-peer-urls http://PRIVATE_IPV4:2390 \
+          --data-dir=/etcd-data --name _NODE_NAME \
+          --initial-advertise-peer-urls http://${NODE_IP}:2390 \
           --listen-peer-urls http://0.0.0.0:2390 \
-          --advertise-client-urls http://PRIVATE_IPV4:2389 \
+          --advertise-client-urls http://${NODE_IP}:2389 \
           --listen-client-urls http://0.0.0.0:2389 \
-          --initial-cluster "KUBE_INITIAL_ETCD_CLUSTER"
+          --initial-cluster "_INITIAL_ETCD_KUBE_CLUSTER"
         ExecStop=/usr/bin/docker stop kube-etcd
         ExecStop=/usr/bin/docker rm kube-etcd
         [Install]

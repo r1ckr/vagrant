@@ -77,6 +77,13 @@ local_pki_dir="easy-rsa-master/easyrsa3/pki"
 kube_ssl_dir="/etc/ssl/kube"
 kube_ssl_tmp_dir="/tmp/certs"
 
+
+# Kube vars:
+k8s_version="v1.8.5"
+arch="amd64"
+dns_service_ip="10.3.0.10"
+kube_token="T1XXVHXsJ3bNVpC66sXQcHYNnG8dAZRL"
+
 Vagrant.configure("2") do |config|
 
   # always use Vagrants insecure key
@@ -165,10 +172,14 @@ Vagrant.configure("2") do |config|
       # Loading the user_data file to replace placeholders
       data = File.read(MASTER_CLOUD_CONFIG_PATH)
       # Replace the placeholders
-      filtered_data = data.gsub("NODE_NAME", vm_name)
-      filtered_data = filtered_data.gsub("KUBE_INITIAL_ETCD_CLUSTER", kube_initial_etcd_cluster)
-      filtered_data = filtered_data.gsub("INITIAL_ETCD_CLUSTER", initial_etcd_cluster)
-      filtered_data = filtered_data.gsub("PRIVATE_IPV4", masterIP(i))
+      filtered_data = data.gsub("_NODE_NAME", vm_name)
+      filtered_data = filtered_data.gsub("_INITIAL_ETCD_KUBE_CLUSTER", kube_initial_etcd_cluster)
+      filtered_data = filtered_data.gsub("_INITIAL_ETCD_CLUSTER", initial_etcd_cluster)
+      filtered_data = filtered_data.gsub("_NODE_IP", masterIP(i))
+      filtered_data = filtered_data.gsub("_K8S_VERSION", k8s_version)
+      filtered_data = filtered_data.gsub("_ARCH", arch)
+      filtered_data = filtered_data.gsub("_DNS_SERVICE_IP", dns_service_ip)
+      filtered_data = filtered_data.gsub("_TOKEN", kube_token)
 
       # Writting it to a temp file
       config_file = Tempfile.new('user_data', :binmode => true)
@@ -201,16 +212,6 @@ Vagrant.configure("2") do |config|
       master.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
       master.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
 
-      # Environment file
-      env_file = Tempfile.new('env_file', :binmode => true)
-      env_file.write("ETCD_INITIAL_CLUSTER=#{kube_initial_etcd_cluster}\n")
-      env_file.write("ETCD_ENDPOINTS=#{kube_etcd_endpoints}\n")
-      env_file.write("MASTER_NODE=#{master_ip}\n")
-      env_file.write("NODE_NAME=m#{i}\n")
-      env_file.write("NODE_IP=#{masterIP(i)}\n") 
-      env_file.close
-      config.vm.provision :file, :source => env_file, :destination => "/tmp/bootstrap.env"
-
       master.vm.provision :file, :source => "master-install.sh", :destination => "/tmp/master-install.sh"
       master.vm.provision :file, :source => "dashboard.yaml", :destination => "/tmp/dashboard.yaml"
 
@@ -238,11 +239,22 @@ Vagrant.configure("2") do |config|
     config.vm.define vm_name = "w%d" % i do |worker|
       worker.vm.hostname = vm_name
 
-      data = YAML.load(IO.readlines(WORKER_CLOUD_CONFIG_PATH)[1..-1].join)
-      data['coreos']['etcd2']['initial-cluster'] = initial_etcd_cluster
-      
-      config_file = Tempfile.new('worker_config', :binmode => true)
-      config_file.write("#cloud-config\n#{data.to_yaml}")
+      # Loading the user_data file to replace placeholders
+      data = File.read(WORKER_CLOUD_CONFIG_PATH)
+      # Replace the placeholders
+      filtered_data = data.gsub("_NODE_NAME", vm_name)
+      filtered_data = filtered_data.gsub("_INITIAL_ETCD_KUBE_CLUSTER", kube_initial_etcd_cluster)
+      filtered_data = filtered_data.gsub("_INITIAL_ETCD_CLUSTER", initial_etcd_cluster)
+      filtered_data = filtered_data.gsub("_NODE_IP", workerIP(i))
+      filtered_data = filtered_data.gsub("_K8S_VERSION", k8s_version)
+      filtered_data = filtered_data.gsub("_ARCH", arch)
+      filtered_data = filtered_data.gsub("_DNS_SERVICE_IP", dns_service_ip)
+      filtered_data = filtered_data.gsub("_TOKEN", kube_token)
+      filtered_data = filtered_data.gsub("_MASTER_NODE", masterIP(1))
+
+      # Writting it to a temp file
+      config_file = Tempfile.new('user_data', :binmode => true)
+      config_file.write(filtered_data)
       config_file.close
 
       worker.vm.provider :virtualbox do |vb|
@@ -270,23 +282,14 @@ Vagrant.configure("2") do |config|
       worker.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
       worker.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
       worker.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
-      
-
-      # Environment file
-      env_file = Tempfile.new('env_file', :binmode => true)
-      env_file.write("MASTER_NODE=#{master_ip}\n")
-      env_file.write("NODE_NAME=w#{i}\n") 
-      env_file.write("NODE_IP=#{workerIP(i)}\n") 
-      env_file.close
-      config.vm.provision :file, :source => env_file, :destination => "/tmp/bootstrap.env"
 
       # Copying CA pem for clients
       worker.vm.provision :shell, :inline => "mkdir -p #{kube_ssl_tmp_dir}", :privileged => false
       worker.vm.provision :file, :source => "#{local_pki_dir}/ca.crt", :destination => "#{kube_ssl_tmp_dir}/ca.crt"
       worker.vm.provision :shell, :inline => "cp #{kube_ssl_tmp_dir}/ca.crt /etc/ssl/certs/kubernetes.pem && update-ca-certificates", :privileged => true
 
-      worker.vm.provision :file, :source => "worker-install.sh", :destination => "/tmp/worker-install.sh"
-      worker.vm.provision :shell, :inline => "chmod +x /tmp/worker-install.sh && /tmp/worker-install.sh", :privileged => true
+#      worker.vm.provision :file, :source => "worker-install.sh", :destination => "/tmp/worker-install.sh"
+#      worker.vm.provision :shell, :inline => "chmod +x /tmp/worker-install.sh && /tmp/worker-install.sh", :privileged => true
     end
   end
 
