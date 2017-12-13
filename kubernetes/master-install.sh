@@ -244,9 +244,8 @@ done
 echo "Adding root user rolebinding..."
 kubectl create clusterrolebinding root-cluster-admin-binding --clusterrole=cluster-admin --user=root
 
-
 echo "Creating token file..."
-echo -n ${TOKEN} > /tmp/token
+echo -n $(cat /etc/kubernetes/bootstrap.env | grep TOKEN | awk -F "=" '{print $2}') > /tmp/token
 
 echo "Creating secret from token file..."
 kubectl create --namespace=kube-system secret generic api-token --from-file=/tmp/token
