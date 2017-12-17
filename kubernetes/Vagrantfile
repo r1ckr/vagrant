@@ -22,6 +22,9 @@ if not plugins_to_install.empty?
 end
 
 $update_channel = "stable"
+# Util VMs: currently running Coreroller
+$utils_count = 1
+$utils_vm_memory = 1024
 # ETCD are the nodes holding the ETCD for CoreOS
 $etcd_count = 1
 $etcd_vm_memory = 512
@@ -29,7 +32,7 @@ $etcd_vm_memory = 512
 $master_count = 1
 $master_vm_memory = 1024
 # Woker nodes will have only kubelet and kube-proxy
-$worker_count = 1
+$worker_count = 2
 $worker_vm_memory = 1024
 $vb_cpuexecutioncap = 100
 
@@ -53,6 +56,8 @@ MASTER_CLOUD_CONFIG_PATH = File.expand_path("master-cloud-config.yaml")
 # CONTROLLER_CLOUD_CONFIG_PATH = File.expand_path("../generic/controller-install.sh")
 WORKER_CLOUD_CONFIG_PATH = File.expand_path("worker-cloud-config.yaml")
 
+utilsIP = "192.168.47.5"
+
 def etcdIP(num)
   return "192.168.47.#{num+10}"
 end
@@ -71,6 +76,7 @@ initial_etcd_cluster = etcdIPs.map.with_index{ |ip, i| "e#{i+1}=http://#{ip}:238
 kube_initial_etcd_cluster = masterIPs.map.with_index{ |ip, i| "m#{i+1}=http://#{ip}:2390" }.join(",")
 kube_etcd_endpoints = masterIPs.map.with_index{ |ip, i| "http://#{ip}:2389" }.join(",")
 master_ip = masterIP(1)
+coreos_update_url="http://"+utilsIP+":8000/v1/update/"
 
 # Set cert envs
 local_pki_dir="easy-rsa-master/easyrsa3/pki"
@@ -113,6 +119,58 @@ Vagrant.configure("2") do |config|
   master_ips = masterIPs.map.with_index{ |ip, i| "#{ip}" }.join(",")
   system("mkdir -p ssl && ./init-ssl-ca.sh #{CONTROLLER_CLUSTER_IP},#{master_ips}") or abort ("failed generating SSL artifacts")
 
+  (1..$utils_count).each do |i|
+      config.vm.define vm_name = "u%d" % i do |utils|
+
+        config.vm.hostname = vm_name
+
+        # Loading the user_data file to replace placeholders
+        data = File.read(MASTER_CLOUD_CONFIG_PATH)
+        # Replace the placeholders
+        filtered_data = data.gsub("_NODE_NAME", vm_name)
+        filtered_data = filtered_data.gsub("_INITIAL_ETCD_KUBE_CLUSTER", kube_initial_etcd_cluster)
+        filtered_data = filtered_data.gsub("_INITIAL_ETCD_CLUSTER", initial_etcd_cluster)
+        filtered_data = filtered_data.gsub("_NODE_IP", masterIP(i))
+        filtered_data = filtered_data.gsub("_K8S_VERSION", k8s_version)
+        filtered_data = filtered_data.gsub("_ARCH", arch)
+        filtered_data = filtered_data.gsub("_DNS_SERVICE_IP", dns_service_ip)
+        filtered_data = filtered_data.gsub("_TOKEN", kube_token)
+
+        # Writting it to a temp file
+        config_file = Tempfile.new('user_data', :binmode => true)
+        config_file.write(filtered_data)
+        config_file.close
+
+        utils.vm.provider :virtualbox do |vb|
+          vb.memory = $utils_vm_memory
+          vb.customize ["modifyvm", :id, "--cpuexecutioncap", "#{$vb_cpuexecutioncap}"]
+          config.ignition.config_obj = vb
+        end
+
+        utils.vm.provider :virtualbox do |vb|
+          config.ignition.hostname = vm_name
+          config.ignition.drive_name = "utils-config" + i.to_s
+          # when the ignition config doesn't exist, the plugin automatically generates a very basic Ignition with the ssh key
+          # and previously specified options (ip and hostname). Otherwise, it appends those to the provided config.ign below
+          if File.exist?(IGNITION_CONFIG_PATH)
+            config.ignition.path = 'config.ign'
+          end
+        end
+
+        utils.vm.network :private_network, ip: utilsIP
+
+        utils.ignition.ip = utilsIP
+        utils.ignition.hostname = vm_name
+
+#        utils.vm.provision :file, :source => config_file.path, :destination => "/tmp/vagrantfile-user-data"
+#        utils.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
+#        utils.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
+#        utils.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
+
+      end
+    end
+
+
   (1..$etcd_count).each do |i|
     config.vm.define vm_name = "e%d" % i do |etcd|
 
@@ -123,6 +181,7 @@ Vagrant.configure("2") do |config|
       data['coreos']['etcd2']['name'] = vm_name
       data['coreos']['etcd2']['advertise-client-urls'] = "http://"+etcdIP(i)+":2379"
       data['coreos']['etcd2']['initial-advertise-peer-urls'] = "http://"+etcdIP(i)+":2380"
+      data['coreos']['update']['server'] = "http://"+utilsIP+":5000/v1/update/"
 
       config_file = Tempfile.new('etcd_config', :binmode => true)
       config_file.write("#cloud-config\n#{data.to_yaml}")
@@ -180,6 +239,7 @@ Vagrant.configure("2") do |config|
       filtered_data = filtered_data.gsub("_ARCH", arch)
       filtered_data = filtered_data.gsub("_DNS_SERVICE_IP", dns_service_ip)
       filtered_data = filtered_data.gsub("_TOKEN", kube_token)
+      filtered_data = filtered_data.gsub("_COREOS_UPDATE_URL", coreos_update_url)
 
       # Writting it to a temp file
       config_file = Tempfile.new('user_data', :binmode => true)
@@ -251,6 +311,7 @@ Vagrant.configure("2") do |config|
       filtered_data = filtered_data.gsub("_DNS_SERVICE_IP", dns_service_ip)
       filtered_data = filtered_data.gsub("_TOKEN", kube_token)
       filtered_data = filtered_data.gsub("_MASTER_NODE", masterIP(1))
+      filtered_data = filtered_data.gsub("_COREOS_UPDATE_URL", coreos_update_url)
 
       # Writting it to a temp file
       config_file = Tempfile.new('user_data', :binmode => true)

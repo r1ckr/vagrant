@@ -2,7 +2,9 @@
 
 coreos:
   update:
-    reboot-strategy: "off"
+    reboot-strategy: "etcd-lock"
+    group: stable
+    server: {{UPDATE_URL}}
   etcd2:
     name: {{ETCD_NODE_NAME}}
     initial-cluster: {{ETCD_INITIAL_CLUSTER}}

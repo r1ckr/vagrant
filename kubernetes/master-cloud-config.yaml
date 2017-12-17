@@ -60,6 +60,8 @@ write_files:
 coreos:
   update:
     reboot-strategy: "etcd-lock"
+    group: stable
+    server: _COREOS_UPDATE_URL
   etcd2:
     proxy: on
     initial-cluster: _INITIAL_ETCD_CLUSTER
