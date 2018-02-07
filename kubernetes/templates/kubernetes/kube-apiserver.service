@@ -1,0 +1,28 @@
+[Unit]
+        Description=Kubernetes API Server
+        Documentation=https://github.com/kubernetes/kubernetes
+        After=download-kube.service
+        Requires=download-kube.service
+        [Service]
+        ExecStart=/opt/bin/kube-apiserver \
+          --service-cluster-ip-range=__SERVICE_CLUSTER_IP_RANGE__ \
+          --etcd-servers=http://127.0.0.1:2389 \
+          --insecure-bind-address=127.0.0.1 \
+          --bind-address=0.0.0.0 \
+          --secure-port=443 \
+          --allow-privileged=true \
+          --client-ca-file=/etc/ssl/kube/ca.crt \
+          --tls-cert-file=/etc/ssl/kube/server.crt \
+          --tls-private-key-file=/etc/ssl/kube/server.key \
+          --service-account-key-file=/etc/ssl/kube/sa.crt \
+          --token-auth-file=/srv/kubernetes/token-auth-file.csv \
+          --authorization-mode=Node,RBAC \
+          --apiserver-count=__API_SERVER_COUNT__ \
+          --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname \
+          --admission-control=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,DefaultTolerationSeconds,NodeRestriction,ResourceQuota \
+          --v=2
+        Restart=on-failure
+        RestartSec=5
+
+        [Install]
+        WantedBy=multi-user.target

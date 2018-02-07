@@ -23,16 +23,16 @@ end
 
 $update_channel = "stable"
 # Util VMs: currently running Coreroller
-$utils_count = 1
+$utils_count = 0
 $utils_vm_memory = 1024
 # ETCD are the nodes holding the ETCD for CoreOS
-$etcd_count = 1
+$etcd_count = 0
 $etcd_vm_memory = 512
 # Master nodes will have the kube-etcd, API Server, scheduler and Kube controller
-$master_count = 1
+$master_count = 3
 $master_vm_memory = 1024
 # Woker nodes will have only kubelet and kube-proxy
-$worker_count = 2
+$worker_count = 0
 $worker_vm_memory = 1024
 $vb_cpuexecutioncap = 100
 
@@ -49,12 +49,13 @@ IGNITION_CONFIG_PATH = File.join(File.dirname(__FILE__), "config.ign")
 
 CONTROLLER_CLUSTER_IP="10.3.0.1"
 
-ETCD_CLOUD_CONFIG_PATH = File.expand_path("etcd-cloud-config.yaml")
+ETCD_CLOUD_CONFIG_PATH = File.expand_path("user_data/etcd.yaml")
 
-MASTER_CLOUD_CONFIG_PATH = File.expand_path("master-cloud-config.yaml")
+MASTER_CLOUD_CONFIG_PATH = File.expand_path("user_data/master.yaml")
 
-# CONTROLLER_CLOUD_CONFIG_PATH = File.expand_path("../generic/controller-install.sh")
-WORKER_CLOUD_CONFIG_PATH = File.expand_path("worker-cloud-config.yaml")
+WORKER_CLOUD_CONFIG_PATH = File.expand_path("user_data/worker.yaml")
+
+UTILS_CLOUD_CONFIG_PATH = File.expand_path("user_data/utils.yaml")
 
 utilsIP = "192.168.47.5"
 
@@ -86,10 +87,11 @@ kube_ssl_tmp_dir="/tmp/certs"
 
 # Kube vars:
 k8s_version="v1.8.5"
-arch="amd64"
 dns_service_ip="10.3.0.10"
+cluster_ip_range="10.3.0.0/16"
+pod_network="10.1.0.0/16"
 kube_token="T1XXVHXsJ3bNVpC66sXQcHYNnG8dAZRL"
-
+kube_cluster_name="kubernetes-vagrant"
 Vagrant.configure("2") do |config|
 
   # always use Vagrants insecure key
@@ -125,21 +127,8 @@ Vagrant.configure("2") do |config|
         config.vm.hostname = vm_name
 
         # Loading the user_data file to replace placeholders
-        data = File.read(MASTER_CLOUD_CONFIG_PATH)
-        # Replace the placeholders
-        filtered_data = data.gsub("_NODE_NAME", vm_name)
-        filtered_data = filtered_data.gsub("_INITIAL_ETCD_KUBE_CLUSTER", kube_initial_etcd_cluster)
-        filtered_data = filtered_data.gsub("_INITIAL_ETCD_CLUSTER", initial_etcd_cluster)
-        filtered_data = filtered_data.gsub("_NODE_IP", masterIP(i))
-        filtered_data = filtered_data.gsub("_K8S_VERSION", k8s_version)
-        filtered_data = filtered_data.gsub("_ARCH", arch)
-        filtered_data = filtered_data.gsub("_DNS_SERVICE_IP", dns_service_ip)
-        filtered_data = filtered_data.gsub("_TOKEN", kube_token)
+        config_file = File.read(UTILS_CLOUD_CONFIG_PATH)
 
-        # Writting it to a temp file
-        config_file = Tempfile.new('user_data', :binmode => true)
-        config_file.write(filtered_data)
-        config_file.close
 
         utils.vm.provider :virtualbox do |vb|
           vb.memory = $utils_vm_memory
@@ -162,10 +151,10 @@ Vagrant.configure("2") do |config|
         utils.ignition.ip = utilsIP
         utils.ignition.hostname = vm_name
 
-#        utils.vm.provision :file, :source => config_file.path, :destination => "/tmp/vagrantfile-user-data"
-#        utils.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
-#        utils.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
-#        utils.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
+        utils.vm.provision :file, :source => config_file.path, :destination => "/tmp/vagrantfile-user-data"
+        utils.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
+        utils.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
+        utils.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
 
       end
     end
@@ -177,20 +166,14 @@ Vagrant.configure("2") do |config|
       config.vm.hostname = vm_name
 
       data = YAML.load(IO.readlines(ETCD_CLOUD_CONFIG_PATH)[1..-1].join)
-      data['coreos']['etcd2']['initial-cluster'] = initial_etcd_cluster
-      data['coreos']['etcd2']['name'] = vm_name
-      data['coreos']['etcd2']['advertise-client-urls'] = "http://"+etcdIP(i)+":2379"
-      data['coreos']['etcd2']['initial-advertise-peer-urls'] = "http://"+etcdIP(i)+":2380"
-      data['coreos']['update']['server'] = "http://"+utilsIP+":5000/v1/update/"
+      # Replace the placeholders
+      filtered_data = data.gsub("__ETCD_NODE_NAME__", vm_name)
+      filtered_data = filtered_data.gsub("__INITIAL_ETCD_CLUSTER__", initial_etcd_cluster)
+      filtered_data = filtered_data.gsub("__COREOS_UPDATE_URL__", coreos_update_url)
 
-      config_file = Tempfile.new('etcd_config', :binmode => true)
-      config_file.write("#cloud-config\n#{data.to_yaml}")
-
-      # new_contents = config_file.gsub("_NODE_NAME", "#{i}")
-      # new_contents = config_file.gsub("_NODE_IP", "#{i}")
-      # new_contents = config_file.gsub("_ETCD_INITIAL_CLUSTER", "#{i}")
-      # config_file.write(new_contents)
-
+      # Writting it to a temp file
+      config_file = Tempfile.new('user_data', :binmode => true)
+      config_file.write(filtered_data)
       config_file.close
 
       etcd.vm.provider :virtualbox do |vb|
@@ -228,22 +211,45 @@ Vagrant.configure("2") do |config|
 
       config.vm.hostname = vm_name
 
+      kube_apiserver_definition = File.read("templates/kubernetes/kube-apiserver.service")
+      kube_apiserver_definition = kube_apiserver_definition.gsub("__SERVICE_CLUSTER_IP_RANGE__", cluster_ip_range)
+      kube_apiserver_definition = kube_apiserver_definition.gsub("__API_SERVER_COUNT__", "#{$master_count}")
+
+      kube_controller_manager_definition = File.read("templates/kubernetes/kube-controller-manager.service")
+      kube_controller_manager_definition = kube_controller_manager_definition.gsub("__POD_NETWORK__", pod_network)
+      kube_controller_manager_definition = kube_controller_manager_definition.gsub("__CLUSTER_NAME__", kube_cluster_name)
+
+      kubelet_definition = File.read("templates/kubernetes/kubelet.service")
+      kubelet_definition = kubelet_definition.gsub("__DNS_SERVICE_IP__", dns_service_ip)
+      kubelet_definition = kubelet_definition.gsub("__NODE_ROLE__", "master")
+
+      token_file = File.read("templates/kubernetes/token-auth-file.csv")
+      token_file = token_file.gsub("__TOKEN__", kube_token)
+
+      kubeconfig_file = File.read("templates/kubernetes/kubeconfig")
+      kubeconfig_file = kubeconfig_file.gsub("__TOKEN__", kube_token)
+      kubeconfig_file = kubeconfig_file.gsub("__CLUSTER_NAME__", kube_cluster_name)
+      kubeconfig_file = kubeconfig_file.gsub("__KUBE_API_LB_URL__", "http://127.0.0.1:8080")
+
       # Loading the user_data file to replace placeholders
-      data = File.read(MASTER_CLOUD_CONFIG_PATH)
-      # Replace the placeholders
-      filtered_data = data.gsub("_NODE_NAME", vm_name)
-      filtered_data = filtered_data.gsub("_INITIAL_ETCD_KUBE_CLUSTER", kube_initial_etcd_cluster)
-      filtered_data = filtered_data.gsub("_INITIAL_ETCD_CLUSTER", initial_etcd_cluster)
-      filtered_data = filtered_data.gsub("_NODE_IP", masterIP(i))
-      filtered_data = filtered_data.gsub("_K8S_VERSION", k8s_version)
-      filtered_data = filtered_data.gsub("_ARCH", arch)
-      filtered_data = filtered_data.gsub("_DNS_SERVICE_IP", dns_service_ip)
-      filtered_data = filtered_data.gsub("_TOKEN", kube_token)
-      filtered_data = filtered_data.gsub("_COREOS_UPDATE_URL", coreos_update_url)
+      user_data = File.read(MASTER_CLOUD_CONFIG_PATH)
+      user_data = user_data.gsub("__INITIAL_ETCD_KUBE_CLUSTER__", kube_initial_etcd_cluster)
+      user_data = user_data.gsub("__INITIAL_ETCD_CLUSTER__", initial_etcd_cluster)
+      user_data = user_data.gsub("__KUBE_API_SERVER_DEFINITION__", kube_apiserver_definition)
+      user_data = user_data.gsub("__KUBE_CONTROLLER_MANAGER_DEFINITION__", kube_controller_manager_definition)
+      user_data = user_data.gsub("__KUBE_SCHEDULER_DEFINITION__", kube_controller_manager_definition)
+      user_data = user_data.gsub("__KUBELET_DEFINITION__", kubelet_definition)
+      user_data = user_data.gsub("__KUBE_PROXY_DEFINITION__", File.read("templates/kubernetes/kube-proxy.service"))
+      user_data = user_data.gsub("__KUBECONFIG__", kubeconfig_file)
+      user_data = user_data.gsub("__TOKEN_FILE__", token_file)
+      user_data = user_data.gsub("__DOWNLOAD_KUBE__", File.read("templates/kubernetes/download-kube.sh"))
+      user_data = user_data.gsub("__COREOS_UPDATE_URL__", coreos_update_url)
+      user_data = user_data.gsub("__ETCD_NODE_NAME__", vm_name)
+      user_data = user_data.gsub("__K8S_VERSION__", k8s_version)
 
       # Writting it to a temp file
       config_file = Tempfile.new('user_data', :binmode => true)
-      config_file.write(filtered_data)
+      config_file.write(user_data)
       config_file.close
 
       master.vm.provider :virtualbox do |vb|
@@ -280,18 +286,13 @@ Vagrant.configure("2") do |config|
       master.vm.provision :file, :source => "#{local_pki_dir}/ca.crt", :destination => "#{kube_ssl_tmp_dir}/ca.crt"
       master.vm.provision :file, :source => "#{local_pki_dir}/private/server.key", :destination => "#{kube_ssl_tmp_dir}/server.key"
       master.vm.provision :file, :source => "#{local_pki_dir}/issued/server.crt", :destination => "#{kube_ssl_tmp_dir}/server.crt"
+      master.vm.provision :file, :source => "#{local_pki_dir}/private/server.key", :destination => "#{kube_ssl_tmp_dir}/sa.key"
+      master.vm.provision :file, :source => "#{local_pki_dir}/issued/server.crt", :destination => "#{kube_ssl_tmp_dir}/sa.crt"
       master.vm.provision :shell, :inline => "mkdir -p #{kube_ssl_dir} && cp #{kube_ssl_tmp_dir}/* #{kube_ssl_dir}/", :privileged => true
 
       # Copying CA pem for clients
       master.vm.provision :shell, :inline => "cp #{kube_ssl_tmp_dir}/ca.crt /etc/ssl/certs/kubernetes.pem && update-ca-certificates", :privileged => true
 
-
-      # Copying the token auth file
-      master.vm.provision :file, :source => "token-auth-file.csv", :destination => "/tmp/token-auth-file.csv"
-      master.vm.provision :shell, :inline => "mkdir -p /srv/kubernetes/ && cp /tmp/token-auth-file.csv /srv/kubernetes/token-auth-file.csv", :privileged => true
-
-      # Installing API Server, Controller and Scheduler
-      master.vm.provision :shell, :inline => "chmod +x /tmp/master-install.sh && /tmp/master-install.sh", :privileged => true
     end
   end
 
@@ -303,10 +304,10 @@ Vagrant.configure("2") do |config|
       data = File.read(WORKER_CLOUD_CONFIG_PATH)
       # Replace the placeholders
       filtered_data = data.gsub("_NODE_NAME", vm_name)
-      filtered_data = filtered_data.gsub("_INITIAL_ETCD_KUBE_CLUSTER", kube_initial_etcd_cluster)
-      filtered_data = filtered_data.gsub("_INITIAL_ETCD_CLUSTER", initial_etcd_cluster)
+      filtered_data = filtered_data.gsub("__INITIAL_ETCD_KUBE_CLUSTER__", kube_initial_etcd_cluster)
+      filtered_data = filtered_data.gsub("__INITIAL_ETCD_CLUSTER__", initial_etcd_cluster)
       filtered_data = filtered_data.gsub("_NODE_IP", workerIP(i))
-      filtered_data = filtered_data.gsub("_K8S_VERSION", k8s_version)
+      filtered_data = filtered_data.gsub("__K8S_VERSION__", k8s_version)
       filtered_data = filtered_data.gsub("_ARCH", arch)
       filtered_data = filtered_data.gsub("_DNS_SERVICE_IP", dns_service_ip)
       filtered_data = filtered_data.gsub("_TOKEN", kube_token)

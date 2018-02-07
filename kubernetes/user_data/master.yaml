@@ -1,0 +1,98 @@
+#cloud-config
+write_files:
+  - path: "/root/download-kube.sh"
+    permissions: "0755"
+    owner: "root"
+    content: |
+      __DOWNLOAD_KUBE__
+  - path: "/root/.kube/config"
+    permissions: 0644
+    owner: root
+    content: |
+      __KUBECONFIG__
+  - path: "/srv/kubernetes/token-auth-file.csv"
+    permissions: 0644
+    owner: root
+    content: |
+      __TOKEN_FILE__
+coreos:
+  update:
+    reboot-strategy: "etcd-lock"
+    group: stable
+    server: __COREOS_UPDATE_URL__
+  etcd2:
+    proxy: on
+    initial-cluster: __INITIAL_ETCD_CLUSTER__
+    listen-client-urls: http://0.0.0.0:2379
+  locksmith:
+    group: "worker"
+    window-start: Mon 9:00
+    window-length: 1h
+  units:
+    - name: etcd2.service
+      command: start
+    - name: kube-etcd.service
+      command: start
+      content: |
+        [Unit]
+        Description=etcd cluster for Kubernetes
+        After=docker.service
+        Requires=docker.service
+        [Service]
+        Restart=on-failure
+        RestartSec=20
+        TimeoutStartSec=60
+        RemainAfterExit=yes
+        ExecStartPre=-/usr/bin/docker stop kube-etcd
+        ExecStartPre=-/usr/bin/docker rm kube-etcd
+        ExecStartPre=/usr/bin/docker pull gcr.io/google-containers/etcd:3.0.17
+        ExecStart=/usr/bin/docker run --name kube-etcd \
+          --net=host \
+          --volume=/var/etcd-data:/etcd-data \
+          gcr.io/google-containers/etcd:3.0.17 \
+          /usr/local/bin/etcd \
+          --data-dir=/etcd-data --name __ETCD_NODE_NAME__ \
+          --initial-advertise-peer-urls http://$private_ipv4:2390 \
+          --listen-peer-urls http://0.0.0.0:2390 \
+          --advertise-client-urls http://$private_ipv4:2389 \
+          --listen-client-urls http://0.0.0.0:2389 \
+          --initial-cluster "__INITIAL_ETCD_KUBE_CLUSTER__"
+        ExecStop=/usr/bin/docker stop kube-etcd
+        ExecStop=/usr/bin/docker rm kube-etcd
+        [Install]
+        WantedBy=multi-user.target
+    - name: download-kube.service
+      command: start
+      content: |
+        [Unit]
+        Description=Download Kubernetes binaries
+        Documentation=https://github.com/kubernetes/kubernetes
+        After=docker.service
+        Requires=docker.service
+        [Service]
+        Environment=K8S_VERSION=__K8S_VERSION__
+        Environment=IS_MASTER=true
+        Type=oneshot
+        ExecStart=/usr/bin/sh -c "if [ ! -d /root/kubernetes ]; then cd /root && /root/download-kube.sh; fi"
+        RemainAfterExit=yes
+        RestartSec=10
+    - name: kube-apiserver.service
+      command: start
+      content: |
+        __KUBE_API_SERVER_DEFINITION__
+    - name: kube-controller-manager.service
+      command: start
+      content: |
+        __KUBE_CONTROLLER_MANAGER_DEFINITION__
+    - name: kube-scheduler.service
+      command: start
+      content: |
+        __KUBE_SCHEDULER_DEFINITION__
+    - name: kubelet.service
+      command: start
+      content: |
+        __KUBELET_DEFINITION__
+    - name: kube-proxy.service
+      command: start
+      content: |
+        __KUBE_PROXY_DEFINITION__

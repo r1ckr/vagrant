@@ -46,3 +46,6 @@ echo "Creating the server certificate and key ..."
 "DNS:kubernetes.default.svc.cluster.local" \
 --days=10000 \
 build-server-full server nopass
+
+echo "Creating the token signing private and public key ..."
+./easyrsa build-client-full sa nopass

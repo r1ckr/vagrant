@@ -4,10 +4,10 @@ coreos:
   update:
     reboot-strategy: "etcd-lock"
     group: stable
-    server: {{UPDATE_URL}}
+    server: __COREOS_UPDATE_URL__
   etcd2:
-    name: {{ETCD_NODE_NAME}}
-    initial-cluster: {{ETCD_INITIAL_CLUSTER}}
+    name: __ETCD_NODE_NAME__
+    initial-cluster: __INITIAL_ETCD_CLUSTER__
     advertise-client-urls: http://$private_ipv4:2379
     listen-client-urls: http://0.0.0.0:2379,http://0.0.0.0:4001
     initial-advertise-peer-urls: http://$private_ipv4:2380

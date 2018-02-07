@@ -4,11 +4,10 @@ write_files:
     permissions: 0644
     owner: root
     content: |
-      K8S_VERSION=_K8S_VERSION
-      ARCH=_ARCH
+      K8S_VERSION=__K8S_VERSION__
       DNS_SERVICE_IP=_DNS_SERVICE_IP
       TOKEN=_TOKEN
-      INITIAL_ETCD_KUBE_CLUSTER=_INITIAL_ETCD_KUBE_CLUSTER
+      INITIAL_ETCD_KUBE_CLUSTER=__INITIAL_ETCD_KUBE_CLUSTER__
       ETCD_ENDPOINTS=_ETCD_ENDPOINTS
       MASTER_NODE=_MASTER_NODE
       NODE_NAME=_NODE_NAME
@@ -43,7 +42,7 @@ write_files:
       clusters:
       - name: local
         cluster:
-          server: http://127.0.0.1:8080
+          server: https://_MASTER_NODE
       contexts:
       - context:
           cluster: local
@@ -51,12 +50,6 @@ write_files:
         name: service-account-context
       current-context: service-account-context
       preferences: {}
-  - path: "/srv/kubernetes/token-auth-file.csv"
-    permissions: 0644
-    owner: root
-    content: |
-      _TOKEN,root,31ada4fd-adec-460c-809a-9e56ceb75269
-
 coreos:
   update:
     reboot-strategy: "etcd-lock"
@@ -64,46 +57,13 @@ coreos:
     server: _COREOS_UPDATE_URL
   etcd2:
     proxy: on
-    initial-cluster: _INITIAL_ETCD_CLUSTER
+    initial-cluster: __INITIAL_ETCD_CLUSTER__
     listen-client-urls: http://0.0.0.0:2379
   locksmith:
     group: "worker"
-    window-start: Mon 9:00
-    window-length: 1h
   units:
     - name: etcd2.service
       command: start
-    - name: kube-etcd.service
-      command: start
-      content: |
-        [Unit]
-        Description=etcd cluster for Kubernetes
-        After=docker.service
-        Requires=docker.service
-        [Service]
-        EnvironmentFile=/etc/kubernetes/bootstrap.env
-        Restart=on-failure
-        RestartSec=20
-        TimeoutStartSec=60
-        RemainAfterExit=yes
-        ExecStartPre=-/usr/bin/docker stop kube-etcd
-        ExecStartPre=-/usr/bin/docker rm kube-etcd
-        ExecStartPre=/usr/bin/docker pull gcr.io/google-containers/etcd:3.0.17
-        ExecStart=/usr/bin/docker run --name kube-etcd \
-          --net=host \
-          --volume=/var/etcd-data:/etcd-data \
-          gcr.io/google-containers/etcd:3.0.17 \
-          /usr/local/bin/etcd \
-          --data-dir=/etcd-data --name _NODE_NAME \
-          --initial-advertise-peer-urls http://${NODE_IP}:2390 \
-          --listen-peer-urls http://0.0.0.0:2390 \
-          --advertise-client-urls http://${NODE_IP}:2389 \
-          --listen-client-urls http://0.0.0.0:2389 \
-          --initial-cluster "_INITIAL_ETCD_KUBE_CLUSTER"
-        ExecStop=/usr/bin/docker stop kube-etcd
-        ExecStop=/usr/bin/docker rm kube-etcd
-        [Install]
-        WantedBy=multi-user.target
     - name: download-kube.service
       command: start
       content: |

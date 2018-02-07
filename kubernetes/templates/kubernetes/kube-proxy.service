@@ -1,0 +1,14 @@
+[Unit]
+        Description=Kubernetes kube-proxy
+        Documentation=https://github.com/kubernetes/kubernetes
+        Requires=download-kube.service
+        After=download-kube.service
+        [Service]
+        ExecStartPre=/usr/bin/mkdir -p /var/lib/kube-proxy/
+        ExecStartPre=/usr/bin/cp /root/.kube/config /var/lib/kube-proxy/kubeconfig
+        ExecStart=/opt/bin/kube-proxy \
+            --kubeconfig=/var/lib/kube-proxy/kubeconfig
+        Restart=always
+        RestartSec=10
+        [Install]
+        WantedBy=multi-user.target
