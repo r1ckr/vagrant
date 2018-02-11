@@ -13,7 +13,7 @@ After it is up, deploy the Dashboard:
 ```
 vagrant ssh m1
 sudo -i
-kubectl create --namespace=kube-system secret generic api-token --from-file=/tmp/token
+kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=cluster-admin
 
 ## After this we can create the dashboard:
 kubectl create -f /tmp/dashboard.yaml

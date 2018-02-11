@@ -29,10 +29,10 @@ $utils_vm_memory = 1024
 $etcd_count = 0
 $etcd_vm_memory = 512
 # Master nodes will have the kube-etcd, API Server, scheduler and Kube controller
-$master_count = 3
+$master_count = 1
 $master_vm_memory = 1024
 # Woker nodes will have only kubelet and kube-proxy
-$worker_count = 0
+$worker_count = 1
 $worker_vm_memory = 1024
 $vb_cpuexecutioncap = 100
 
@@ -86,7 +86,7 @@ kube_ssl_tmp_dir="/tmp/certs"
 
 
 # Kube vars:
-k8s_version="v1.8.5"
+k8s_version="v1.9.2"
 dns_service_ip="10.3.0.10"
 cluster_ip_range="10.3.0.0/16"
 pod_network="10.1.0.0/16"
@@ -165,15 +165,15 @@ Vagrant.configure("2") do |config|
 
       config.vm.hostname = vm_name
 
-      data = YAML.load(IO.readlines(ETCD_CLOUD_CONFIG_PATH)[1..-1].join)
+      user_data = YAML.load(IO.readlines(ETCD_CLOUD_CONFIG_PATH)[1..-1].join)
       # Replace the placeholders
-      filtered_data = data.gsub("__ETCD_NODE_NAME__", vm_name)
-      filtered_data = filtered_data.gsub("__INITIAL_ETCD_CLUSTER__", initial_etcd_cluster)
-      filtered_data = filtered_data.gsub("__COREOS_UPDATE_URL__", coreos_update_url)
+      user_data = user_data.gsub("__ETCD_NODE_NAME__", vm_name)
+      user_data = user_data.gsub("__INITIAL_ETCD_CLUSTER__", initial_etcd_cluster)
+      user_data = user_data.gsub("__COREOS_UPDATE_URL__", coreos_update_url)
 
       # Writting it to a temp file
       config_file = Tempfile.new('user_data', :binmode => true)
-      config_file.write(filtered_data)
+      config_file.write(user_data)
       config_file.close
 
       etcd.vm.provider :virtualbox do |vb|
@@ -193,7 +193,6 @@ Vagrant.configure("2") do |config|
       end
 
       etcd.vm.network :private_network, ip: etcdIP(i)
-
       etcd.ignition.ip = etcdIP(i)
       etcd.ignition.hostname = vm_name
 
@@ -210,6 +209,31 @@ Vagrant.configure("2") do |config|
     config.vm.define vm_name = "m%d" % i do |master|
 
       config.vm.hostname = vm_name
+      master.vm.provider :virtualbox do |vb|
+        vb.memory = $master_vm_memory
+        vb.customize ["modifyvm", :id, "--cpuexecutioncap", "#{$vb_cpuexecutioncap}"]
+        config.ignition.config_obj = vb
+      end
+
+      master.vm.provider :virtualbox do |vb|
+        config.ignition.hostname = vm_name
+        config.ignition.drive_name = "master-config" + i.to_s
+        # when the ignition config doesn't exist, the plugin automatically generates a very basic Ignition with the ssh key
+        # and previously specified options (ip and hostname). Otherwise, it appends those to the provided config.ign below
+        if File.exist?(IGNITION_CONFIG_PATH)
+          config.ignition.path = 'config.ign'
+        end
+      end
+
+      master.vm.network :private_network, ip: masterIP(i)
+      master.ignition.ip = masterIP(i)
+      master.ignition.hostname = vm_name
+
+
+
+      kube_etcd_definition = File.read("templates/kubernetes/kube-etcd.service")
+      kube_etcd_definition = kube_etcd_definition.gsub("__ETCD_NODE_NAME__", vm_name)
+      kube_etcd_definition = kube_etcd_definition.gsub("__INITIAL_ETCD_KUBE_CLUSTER__", kube_initial_etcd_cluster)
 
       kube_apiserver_definition = File.read("templates/kubernetes/kube-apiserver.service")
       kube_apiserver_definition = kube_apiserver_definition.gsub("__SERVICE_CLUSTER_IP_RANGE__", cluster_ip_range)
@@ -233,8 +257,8 @@ Vagrant.configure("2") do |config|
 
       # Loading the user_data file to replace placeholders
       user_data = File.read(MASTER_CLOUD_CONFIG_PATH)
-      user_data = user_data.gsub("__INITIAL_ETCD_KUBE_CLUSTER__", kube_initial_etcd_cluster)
       user_data = user_data.gsub("__INITIAL_ETCD_CLUSTER__", initial_etcd_cluster)
+      user_data = user_data.gsub("__KUBE_ETCD_DEFINITION__", kube_etcd_definition)
       user_data = user_data.gsub("__KUBE_API_SERVER_DEFINITION__", kube_apiserver_definition)
       user_data = user_data.gsub("__KUBE_CONTROLLER_MANAGER_DEFINITION__", kube_controller_manager_definition)
       user_data = user_data.gsub("__KUBE_SCHEDULER_DEFINITION__", kube_controller_manager_definition)
@@ -244,34 +268,12 @@ Vagrant.configure("2") do |config|
       user_data = user_data.gsub("__TOKEN_FILE__", token_file)
       user_data = user_data.gsub("__DOWNLOAD_KUBE__", File.read("templates/kubernetes/download-kube.sh"))
       user_data = user_data.gsub("__COREOS_UPDATE_URL__", coreos_update_url)
-      user_data = user_data.gsub("__ETCD_NODE_NAME__", vm_name)
       user_data = user_data.gsub("__K8S_VERSION__", k8s_version)
 
       # Writting it to a temp file
       config_file = Tempfile.new('user_data', :binmode => true)
       config_file.write(user_data)
       config_file.close
-
-      master.vm.provider :virtualbox do |vb|
-        vb.memory = $master_vm_memory
-        vb.customize ["modifyvm", :id, "--cpuexecutioncap", "#{$vb_cpuexecutioncap}"]
-        config.ignition.config_obj = vb
-      end
-
-      master.vm.provider :virtualbox do |vb|
-        config.ignition.hostname = vm_name
-        config.ignition.drive_name = "master-config" + i.to_s
-        # when the ignition config doesn't exist, the plugin automatically generates a very basic Ignition with the ssh key
-        # and previously specified options (ip and hostname). Otherwise, it appends those to the provided config.ign below
-        if File.exist?(IGNITION_CONFIG_PATH)
-          config.ignition.path = 'config.ign'
-        end
-      end
-
-      master.vm.network :private_network, ip: masterIP(i)
-
-      master.ignition.ip = masterIP(i)
-      master.ignition.hostname = vm_name
 
       master.vm.provision :file, :source => config_file.path, :destination => "/tmp/vagrantfile-user-data"
       master.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
@@ -300,23 +302,30 @@ Vagrant.configure("2") do |config|
     config.vm.define vm_name = "w%d" % i do |worker|
       worker.vm.hostname = vm_name
 
+      kubelet_definition = File.read("templates/kubernetes/kubelet.service")
+      kubelet_definition = kubelet_definition.gsub("__DNS_SERVICE_IP__", dns_service_ip)
+      kubelet_definition = kubelet_definition.gsub("__NODE_ROLE__", "node")
+
+      kubeconfig_file = File.read("templates/kubernetes/kubeconfig")
+      kubeconfig_file = kubeconfig_file.gsub("__TOKEN__", kube_token)
+      kubeconfig_file = kubeconfig_file.gsub("__CLUSTER_NAME__", kube_cluster_name)
+      kubeconfig_file = kubeconfig_file.gsub("__KUBE_API_LB_URL__",  "https://"+masterIP(1))
+
       # Loading the user_data file to replace placeholders
-      data = File.read(WORKER_CLOUD_CONFIG_PATH)
+      user_data = File.read(WORKER_CLOUD_CONFIG_PATH)
       # Replace the placeholders
-      filtered_data = data.gsub("_NODE_NAME", vm_name)
-      filtered_data = filtered_data.gsub("__INITIAL_ETCD_KUBE_CLUSTER__", kube_initial_etcd_cluster)
-      filtered_data = filtered_data.gsub("__INITIAL_ETCD_CLUSTER__", initial_etcd_cluster)
-      filtered_data = filtered_data.gsub("_NODE_IP", workerIP(i))
-      filtered_data = filtered_data.gsub("__K8S_VERSION__", k8s_version)
-      filtered_data = filtered_data.gsub("_ARCH", arch)
-      filtered_data = filtered_data.gsub("_DNS_SERVICE_IP", dns_service_ip)
-      filtered_data = filtered_data.gsub("_TOKEN", kube_token)
-      filtered_data = filtered_data.gsub("_MASTER_NODE", masterIP(1))
-      filtered_data = filtered_data.gsub("_COREOS_UPDATE_URL", coreos_update_url)
+      user_data = user_data.gsub("_NODE_NAME", vm_name)
+      user_data = user_data.gsub("__INITIAL_ETCD_KUBE_CLUSTER__", kube_initial_etcd_cluster)
+      user_data = user_data.gsub("__INITIAL_ETCD_CLUSTER__", initial_etcd_cluster)
+      user_data = user_data.gsub("__K8S_VERSION__", k8s_version)
+      user_data = user_data.gsub("__KUBELET_DEFINITION__", kubelet_definition)
+      user_data = user_data.gsub("__KUBE_PROXY_DEFINITION__", File.read("templates/kubernetes/kube-proxy.service"))
+      user_data = user_data.gsub("__DOWNLOAD_KUBE__", File.read("templates/kubernetes/download-kube.sh"))
+      user_data = user_data.gsub("__KUBECONFIG__", kubeconfig_file)
 
       # Writting it to a temp file
       config_file = Tempfile.new('user_data', :binmode => true)
-      config_file.write(filtered_data)
+      config_file.write(user_data)
       config_file.close
 
       worker.vm.provider :virtualbox do |vb|
@@ -336,7 +345,6 @@ Vagrant.configure("2") do |config|
       end
 
       worker.vm.network :private_network, ip: workerIP(i)
-
       worker.ignition.ip = workerIP(i)
       worker.ignition.hostname = vm_name
 
