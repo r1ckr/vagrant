@@ -57,7 +57,10 @@
         --client-key=/etc/ssl/kube/kube-proxy-key.pem \
         --embed-certs=true \
         --kubeconfig=kube-proxy.kubeconfig
-      /opt/bin/kubectl config set-context default --cluster=kubernetes \
-        --user=kube-proxy --kubeconfig=kube-proxy.kubeconfig
+      /opt/bin/kubectl config set-context default \
+        --cluster=kubernetes \
+        --user=kube-proxy \
+        --kubeconfig=kube-proxy.kubeconfig
+      /opt/bin/kubectl config use-context default --kubeconfig=kube-proxy.kubeconfig
       mkdir -p /var/lib/kube-proxy/
       mv kube-proxy.kubeconfig /var/lib/kube-proxy/kubeconfig

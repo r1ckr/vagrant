@@ -5,6 +5,11 @@ write_files:
     owner: "root"
     content: |
       __DOWNLOAD_KUBE__
+  - path: "/var/lib/kube-proxy/config"
+    permissions: 0644
+    owner: root
+    content: |
+      __PROXYCONFIG__
 coreos:
   update:
     reboot-strategy: "etcd-lock"
@@ -18,6 +23,8 @@ coreos:
     group: "worker"
   units:
     - name: etcd2.service
+      command: start
+    - name: flanneld.service
       command: start
     - name: download-kube.service
       command: start

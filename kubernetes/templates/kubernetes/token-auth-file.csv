@@ -1,1 +1,1 @@
-__TOKEN__,kubelet-bootstrap,10001,"system:kubelet-bootstrap"
+__TOKEN__,kubelet-bootstrap,10001,"system:node-bootstrapper"

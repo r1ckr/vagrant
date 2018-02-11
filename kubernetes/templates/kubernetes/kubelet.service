@@ -9,6 +9,7 @@
         ExecStartPre=/usr/bin/mkdir -p /var/lib/kubelet/
         ExecStart=/bin/bash -c '/opt/bin/kubelet \
             --hostname-override=$private_ipv4 \
+            --node-ip=$private_ipv4 \
             --healthz-bind-address=0.0.0.0 \
             --kubeconfig=/var/lib/kubelet/kubeconfig \
             --cluster-dns=__DNS_SERVICE_IP__ \

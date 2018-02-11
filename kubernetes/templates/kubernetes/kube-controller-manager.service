@@ -15,7 +15,6 @@
           --address=0.0.0.0 \
           --cluster-name=__CLUSTER_NAME__ \
           --feature-gates=RotateKubeletServerCertificate=true \
-          --controllers=*,bootstrapsigner,csrapproving \
           --v=2
         Restart=on-failure
         RestartSec=5

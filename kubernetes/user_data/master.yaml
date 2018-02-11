@@ -10,6 +10,11 @@ write_files:
     owner: root
     content: |
       __KUBECONFIG__
+  - path: "/var/lib/kube-proxy/config"
+    permissions: 0644
+    owner: root
+    content: |
+      __PROXYCONFIG__
   - path: "/srv/kubernetes/token-auth-file.csv"
     permissions: 0644
     owner: root
@@ -30,6 +35,8 @@ coreos:
     window-length: 1h
   units:
     - name: etcd2.service
+      command: start
+    - name: flanneld.service
       command: start
     - name: kube-etcd.service
       command: start

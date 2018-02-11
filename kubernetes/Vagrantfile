@@ -26,7 +26,7 @@ $update_channel = "stable"
 $utils_count = 0
 $utils_vm_memory = 1024
 # ETCD are the nodes holding the ETCD for CoreOS
-$etcd_count = 0
+$etcd_count = 1
 $etcd_vm_memory = 512
 # Master nodes will have the kube-etcd, API Server, scheduler and Kube controller
 $master_count = 1
@@ -255,6 +255,9 @@ Vagrant.configure("2") do |config|
       kubeconfig_file = kubeconfig_file.gsub("__CLUSTER_NAME__", kube_cluster_name)
       kubeconfig_file = kubeconfig_file.gsub("__KUBE_API_LB_URL__", "http://127.0.0.1:8080")
 
+      proxyconfig_file = File.read("templates/kubernetes/proxyconfig")
+      proxyconfig_file = proxyconfig_file.gsub("__NODE_IP__", masterIP(i))
+
       # Loading the user_data file to replace placeholders
       user_data = File.read(MASTER_CLOUD_CONFIG_PATH)
       user_data = user_data.gsub("__INITIAL_ETCD_CLUSTER__", initial_etcd_cluster)
@@ -272,6 +275,7 @@ Vagrant.configure("2") do |config|
       user_data = user_data.gsub("__TOKEN__", kube_token)
       user_data = user_data.gsub("__CLUSTER_NAME__", kube_cluster_name)
       user_data = user_data.gsub("__KUBE_API_LB_URL__", "https://"+masterIP(1))
+      user_data = user_data.gsub("__PROXYCONFIG__", proxyconfig_file)
 
       # Writting it to a temp file
       config_file = Tempfile.new('user_data', :binmode => true)
@@ -309,6 +313,9 @@ Vagrant.configure("2") do |config|
       kubelet_definition = kubelet_definition.gsub("__DNS_SERVICE_IP__", dns_service_ip)
       kubelet_definition = kubelet_definition.gsub("__NODE_ROLE__", "node")
 
+      proxyconfig_file = File.read("templates/kubernetes/proxyconfig")
+      proxyconfig_file = proxyconfig_file.gsub("__NODE_IP__", workerIP(i))
+
       # Loading the user_data file to replace placeholders
       user_data = File.read(WORKER_CLOUD_CONFIG_PATH)
       # Replace the placeholders
@@ -322,6 +329,8 @@ Vagrant.configure("2") do |config|
       user_data = user_data.gsub("__TOKEN__", kube_token)
       user_data = user_data.gsub("__CLUSTER_NAME__", kube_cluster_name)
       user_data = user_data.gsub("__KUBE_API_LB_URL__", "https://"+masterIP(1))
+      user_data = user_data.gsub("__PROXYCONFIG__", proxyconfig_file)
+
 
       # Writting it to a temp file
       config_file = Tempfile.new('user_data', :binmode => true)
