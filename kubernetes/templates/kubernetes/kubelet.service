@@ -7,7 +7,6 @@
         ExecStartPre=/usr/bin/mkdir -p /etc/kubernetes/manifests
         ExecStartPre=/usr/bin/mkdir -p /var/log/containers
         ExecStartPre=/usr/bin/mkdir -p /var/lib/kubelet/
-        ExecStartPre=/usr/bin/cp /root/.kube/config /var/lib/kubelet/kubeconfig
         ExecStart=/bin/bash -c '/opt/bin/kubelet \
             --hostname-override=$private_ipv4 \
             --healthz-bind-address=0.0.0.0 \
@@ -16,7 +15,10 @@
             --cluster-domain=cluster.local \
             --pod-manifest-path=/etc/kubernetes/manifests \
             --node-labels=kubernetes.io/role="__NODE_ROLE__" \
-            --allow-privileged \
+            --allow-privileged=true \
+            --register-node=true \
+            --bootstrap-kubeconfig="/var/lib/kubelet/bootstrap.kubeconfig" \
+            --feature-gates=RotateKubeletClientCertificate=true,RotateKubeletServerCertificate=true \
             --v=2'
         Restart=always
         RestartSec=10

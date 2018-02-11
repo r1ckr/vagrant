@@ -5,11 +5,6 @@ write_files:
     owner: "root"
     content: |
       __DOWNLOAD_KUBE__
-  - path: "/root/.kube/config"
-    permissions: 0644
-    owner: root
-    content: |
-      __KUBECONFIG__
 coreos:
   update:
     reboot-strategy: "etcd-lock"
@@ -34,6 +29,8 @@ coreos:
         Requires=docker.service
         [Service]
         Environment=K8S_VERSION=__K8S_VERSION__
+        Environment=KUBE_API_LB_URL=__KUBE_API_LB_URL__
+        Environment=TOKEN=__TOKEN__
         Type=oneshot
         ExecStart=/usr/bin/sh -c "if [ ! -d /root/kubernetes ]; then cd /root && /root/download-kube.sh; fi"
         RemainAfterExit=yes

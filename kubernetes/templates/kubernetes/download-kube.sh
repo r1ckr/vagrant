@@ -29,3 +29,35 @@
       rsync -a ./* /opt/bin/
       
       cd ../
+
+      echo "Creating bootstrap kubeconfig..."
+      /opt/bin/kubectl config set-cluster kubernetes --certificate-authority=/etc/ssl/kube/ca.pem \
+        --embed-certs=true \
+        --server=${KUBE_API_LB_URL} \
+        --kubeconfig=bootstrap.kubeconfig
+      /opt/bin/kubectl config set-credentials kubelet-bootstrap \
+        --token=${TOKEN} \
+        --kubeconfig=bootstrap.kubeconfig
+      /opt/bin/kubectl config set-context default \
+        --cluster=kubernetes \
+        --user=kubelet-bootstrap \
+        --kubeconfig=bootstrap.kubeconfig
+      /opt/bin/kubectl config use-context default --kubeconfig=bootstrap.kubeconfig
+      mkdir -p /var/lib/kubelet/
+      mv bootstrap.kubeconfig /var/lib/kubelet/bootstrap.kubeconfig
+
+      echo "Creating kube-proxy kubeconfig..."
+      /opt/bin/kubectl config set-cluster kubernetes \
+        --certificate-authority=/etc/ssl/kube/ca.pem \
+        --embed-certs=true \
+        --server=${KUBE_API_LB_URL} \
+        --kubeconfig=kube-proxy.kubeconfig
+      /opt/bin/kubectl config set-credentials kube-proxy \
+        --client-certificate=/etc/ssl/kube/kube-proxy.pem \
+        --client-key=/etc/ssl/kube/kube-proxy-key.pem \
+        --embed-certs=true \
+        --kubeconfig=kube-proxy.kubeconfig
+      /opt/bin/kubectl config set-context default --cluster=kubernetes \
+        --user=kube-proxy --kubeconfig=kube-proxy.kubeconfig
+      mkdir -p /var/lib/kube-proxy/
+      mv kube-proxy.kubeconfig /var/lib/kube-proxy/kubeconfig

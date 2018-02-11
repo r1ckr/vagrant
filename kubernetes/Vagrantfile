@@ -80,7 +80,7 @@ master_ip = masterIP(1)
 coreos_update_url="http://"+utilsIP+":8000/v1/update/"
 
 # Set cert envs
-local_pki_dir="easy-rsa-master/easyrsa3/pki"
+local_pki_dir="certs"
 kube_ssl_dir="/etc/ssl/kube"
 kube_ssl_tmp_dir="/tmp/certs"
 
@@ -90,7 +90,7 @@ k8s_version="v1.9.2"
 dns_service_ip="10.3.0.10"
 cluster_ip_range="10.3.0.0/16"
 pod_network="10.1.0.0/16"
-kube_token="T1XXVHXsJ3bNVpC66sXQcHYNnG8dAZRL"
+kube_token="c235d0d999cfe176d874d2161427c834"
 kube_cluster_name="kubernetes-vagrant"
 Vagrant.configure("2") do |config|
 
@@ -119,7 +119,7 @@ Vagrant.configure("2") do |config|
 
   # Generate root CA and certs
   master_ips = masterIPs.map.with_index{ |ip, i| "#{ip}" }.join(",")
-  system("mkdir -p ssl && ./init-ssl-ca.sh #{CONTROLLER_CLUSTER_IP},#{master_ips}") or abort ("failed generating SSL artifacts")
+  system("./init-ssl-ca.sh #{CONTROLLER_CLUSTER_IP},#{master_ips}") or abort ("failed generating SSL artifacts")
 
   (1..$utils_count).each do |i|
       config.vm.define vm_name = "u%d" % i do |utils|
@@ -165,7 +165,7 @@ Vagrant.configure("2") do |config|
 
       config.vm.hostname = vm_name
 
-      user_data = YAML.load(IO.readlines(ETCD_CLOUD_CONFIG_PATH)[1..-1].join)
+      user_data = File.read(ETCD_CLOUD_CONFIG_PATH)
       # Replace the placeholders
       user_data = user_data.gsub("__ETCD_NODE_NAME__", vm_name)
       user_data = user_data.gsub("__INITIAL_ETCD_CLUSTER__", initial_etcd_cluster)
@@ -269,31 +269,34 @@ Vagrant.configure("2") do |config|
       user_data = user_data.gsub("__DOWNLOAD_KUBE__", File.read("templates/kubernetes/download-kube.sh"))
       user_data = user_data.gsub("__COREOS_UPDATE_URL__", coreos_update_url)
       user_data = user_data.gsub("__K8S_VERSION__", k8s_version)
+      user_data = user_data.gsub("__TOKEN__", kube_token)
+      user_data = user_data.gsub("__CLUSTER_NAME__", kube_cluster_name)
+      user_data = user_data.gsub("__KUBE_API_LB_URL__", "https://"+masterIP(1))
 
       # Writting it to a temp file
       config_file = Tempfile.new('user_data', :binmode => true)
       config_file.write(user_data)
       config_file.close
 
-      master.vm.provision :file, :source => config_file.path, :destination => "/tmp/vagrantfile-user-data"
-      master.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
-      master.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
-      master.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
-
-      master.vm.provision :file, :source => "master-install.sh", :destination => "/tmp/master-install.sh"
       master.vm.provision :file, :source => "dashboard.yaml", :destination => "/tmp/dashboard.yaml"
 
       # Copying the certs for API Server:
       master.vm.provision :shell, :inline => "mkdir -p #{kube_ssl_tmp_dir}", :privileged => false
-      master.vm.provision :file, :source => "#{local_pki_dir}/ca.crt", :destination => "#{kube_ssl_tmp_dir}/ca.crt"
-      master.vm.provision :file, :source => "#{local_pki_dir}/private/server.key", :destination => "#{kube_ssl_tmp_dir}/server.key"
-      master.vm.provision :file, :source => "#{local_pki_dir}/issued/server.crt", :destination => "#{kube_ssl_tmp_dir}/server.crt"
-      master.vm.provision :file, :source => "#{local_pki_dir}/private/server.key", :destination => "#{kube_ssl_tmp_dir}/sa.key"
-      master.vm.provision :file, :source => "#{local_pki_dir}/issued/server.crt", :destination => "#{kube_ssl_tmp_dir}/sa.crt"
+      master.vm.provision :file, :source => "#{local_pki_dir}/ca.pem", :destination => "#{kube_ssl_tmp_dir}/ca.pem"
+      master.vm.provision :file, :source => "#{local_pki_dir}/ca-key.pem", :destination => "#{kube_ssl_tmp_dir}/ca-key.pem"
+      master.vm.provision :file, :source => "#{local_pki_dir}/kubernetes-key.pem", :destination => "#{kube_ssl_tmp_dir}/kubernetes-key.pem"
+      master.vm.provision :file, :source => "#{local_pki_dir}/kubernetes.pem", :destination => "#{kube_ssl_tmp_dir}/kubernetes.pem"
+      master.vm.provision :file, :source => "#{local_pki_dir}/kube-proxy-key.pem", :destination => "#{kube_ssl_tmp_dir}/kube-proxy-key.pem"
+      master.vm.provision :file, :source => "#{local_pki_dir}/kube-proxy.pem", :destination => "#{kube_ssl_tmp_dir}/kube-proxy.pem"
       master.vm.provision :shell, :inline => "mkdir -p #{kube_ssl_dir} && cp #{kube_ssl_tmp_dir}/* #{kube_ssl_dir}/", :privileged => true
 
       # Copying CA pem for clients
-      master.vm.provision :shell, :inline => "cp #{kube_ssl_tmp_dir}/ca.crt /etc/ssl/certs/kubernetes.pem && update-ca-certificates", :privileged => true
+      master.vm.provision :shell, :inline => "cp #{kube_ssl_tmp_dir}/ca.pem /etc/ssl/certs/kube-ca.pem && update-ca-certificates", :privileged => true
+
+      master.vm.provision :file, :source => config_file.path, :destination => "/tmp/vagrantfile-user-data"
+      master.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
+      master.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
+      master.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
 
     end
   end
@@ -306,11 +309,6 @@ Vagrant.configure("2") do |config|
       kubelet_definition = kubelet_definition.gsub("__DNS_SERVICE_IP__", dns_service_ip)
       kubelet_definition = kubelet_definition.gsub("__NODE_ROLE__", "node")
 
-      kubeconfig_file = File.read("templates/kubernetes/kubeconfig")
-      kubeconfig_file = kubeconfig_file.gsub("__TOKEN__", kube_token)
-      kubeconfig_file = kubeconfig_file.gsub("__CLUSTER_NAME__", kube_cluster_name)
-      kubeconfig_file = kubeconfig_file.gsub("__KUBE_API_LB_URL__",  "https://"+masterIP(1))
-
       # Loading the user_data file to replace placeholders
       user_data = File.read(WORKER_CLOUD_CONFIG_PATH)
       # Replace the placeholders
@@ -321,7 +319,9 @@ Vagrant.configure("2") do |config|
       user_data = user_data.gsub("__KUBELET_DEFINITION__", kubelet_definition)
       user_data = user_data.gsub("__KUBE_PROXY_DEFINITION__", File.read("templates/kubernetes/kube-proxy.service"))
       user_data = user_data.gsub("__DOWNLOAD_KUBE__", File.read("templates/kubernetes/download-kube.sh"))
-      user_data = user_data.gsub("__KUBECONFIG__", kubeconfig_file)
+      user_data = user_data.gsub("__TOKEN__", kube_token)
+      user_data = user_data.gsub("__CLUSTER_NAME__", kube_cluster_name)
+      user_data = user_data.gsub("__KUBE_API_LB_URL__", "https://"+masterIP(1))
 
       # Writting it to a temp file
       config_file = Tempfile.new('user_data', :binmode => true)
@@ -348,18 +348,19 @@ Vagrant.configure("2") do |config|
       worker.ignition.ip = workerIP(i)
       worker.ignition.hostname = vm_name
 
+      # Copying CA pem for clients
+      worker.vm.provision :shell, :inline => "mkdir -p #{kube_ssl_tmp_dir}", :privileged => false
+      worker.vm.provision :file, :source => "#{local_pki_dir}/ca.pem", :destination => "#{kube_ssl_tmp_dir}/ca.pem"
+      worker.vm.provision :file, :source => "#{local_pki_dir}/kube-proxy-key.pem", :destination => "#{kube_ssl_tmp_dir}/kube-proxy-key.pem"
+      worker.vm.provision :file, :source => "#{local_pki_dir}/kube-proxy.pem", :destination => "#{kube_ssl_tmp_dir}/kube-proxy.pem"
+      worker.vm.provision :shell, :inline => "cp #{kube_ssl_tmp_dir}/ca.pem /etc/ssl/certs/kube-ca.pem && update-ca-certificates", :privileged => true
+      worker.vm.provision :shell, :inline => "mkdir -p #{kube_ssl_dir} && cp #{kube_ssl_tmp_dir}/* #{kube_ssl_dir}/", :privileged => true
+
+
       worker.vm.provision :file, :source => config_file.path, :destination => "/tmp/vagrantfile-user-data"
       worker.vm.provision :shell, :inline => "mkdir -p /var/lib/coreos-vagrant/", :privileged => true
       worker.vm.provision :shell, :inline => "mv /tmp/vagrantfile-user-data /var/lib/coreos-vagrant/", :privileged => true
       worker.vm.provision :shell, :inline => "coreos-cloudinit --from-file /var/lib/coreos-vagrant/vagrantfile-user-data", :privileged => true
-
-      # Copying CA pem for clients
-      worker.vm.provision :shell, :inline => "mkdir -p #{kube_ssl_tmp_dir}", :privileged => false
-      worker.vm.provision :file, :source => "#{local_pki_dir}/ca.crt", :destination => "#{kube_ssl_tmp_dir}/ca.crt"
-      worker.vm.provision :shell, :inline => "cp #{kube_ssl_tmp_dir}/ca.crt /etc/ssl/certs/kubernetes.pem && update-ca-certificates", :privileged => true
-
-#      worker.vm.provision :file, :source => "worker-install.sh", :destination => "/tmp/worker-install.sh"
-#      worker.vm.provision :shell, :inline => "chmod +x /tmp/worker-install.sh && /tmp/worker-install.sh", :privileged => true
     end
   end
 
