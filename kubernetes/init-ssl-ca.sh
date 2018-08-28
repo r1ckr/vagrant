@@ -3,6 +3,11 @@
 ## Following: https://kubernetes.io/docs/concepts/cluster-administration/certificates/
 set -e
 
+cfssl version
+if [ $? -ne 0 ]; then
+    echo "cfssl is not installed, please install cfssl and try again"
+fi
+
 function usage {
     echo "USAGE: $0 <MASTER_CLUSTER_IP>,<MASTER_IP>,<MASTER_IP>"
     echo "  example: $0 ./ssl"
@@ -13,36 +18,136 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
-IPS="IP:$1"
-
-IPS="${IPS//,/,IP:}"
+IPS="$1"
 
 # Check if easy-rsa is already downloaded
-if [ -d easy-rsa-master/easyrsa3 ]; then
-	echo "easy-rsa already downloaded"
-	
-	if [ -d easy-rsa-master/easyrsa3/pki ]; then
-		echo "pki already initialized, using previous values..."
-		exit 0
-	fi
-else
-	curl -L -O https://storage.googleapis.com/kubernetes-release/easy-rsa/easy-rsa.tar.gz > /dev/null 2>&1
-	tar xzf easy-rsa.tar.gz > /dev/null 2>&1
+if [ -d certs ]; then
+	echo "Certs already provisioned"
+  exit 0
 fi
 
-echo "Initializing easy-rsa"
-cd easy-rsa-master/easyrsa3
-./easyrsa init-pki > /dev/null 2>&1
+mkdir certs && cd certs
 
-echo "Creating the CA..."
-./easyrsa --batch "--req-cn=kube-ca@`date +%s`" build-ca nopass
+echo "Generating ca cert..."
+cat > ca-config.json <<EOF
+{
+  "signing": {
+    "default": {
+      "expiry": "8760h"
+    },
+    "profiles": {
+      "kubernetes": {
+        "usages": ["signing", "key encipherment", "server auth", "client auth"],
+        "expiry": "8760h"
+      }
+    }
+  }
+}
+EOF
 
-echo "Creating the server certificate and key ..."
-./easyrsa --subject-alt-name="${IPS}",\
-"DNS:kubernetes,"\
-"DNS:kubernetes.default,"\
-"DNS:kubernetes.default.svc,"\
-"DNS:kubernetes.default.svc.cluster,"\
-"DNS:kubernetes.default.svc.cluster.local" \
---days=10000 \
-build-server-full server nopass
+cat > ca-csr.json <<EOF
+{
+  "CN": "Kubernetes",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "Portland",
+      "O": "Kubernetes",
+      "OU": "CA",
+      "ST": "Oregon"
+    }
+  ]
+}
+EOF
+
+cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+
+echo "Generating Admin cert..."
+cat > admin-csr.json <<EOF
+{
+  "CN": "admin",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "Portland",
+      "O": "system:masters",
+      "OU": "Kubernetes The Hard Way",
+      "ST": "Oregon"
+    }
+  ]
+}
+EOF
+
+cfssl gencert \
+  -ca=ca.pem \
+  -ca-key=ca-key.pem \
+  -config=ca-config.json \
+  -profile=kubernetes \
+  admin-csr.json | cfssljson -bare admin
+
+echo "Generating kube-proxy cert..."
+cat > kube-proxy-csr.json <<EOF
+{
+  "CN": "system:kube-proxy",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "Portland",
+      "O": "system:node-proxier",
+      "OU": "Kubernetes The Hard Way",
+      "ST": "Oregon"
+    }
+  ]
+}
+EOF
+
+cfssl gencert \
+  -ca=ca.pem \
+  -ca-key=ca-key.pem \
+  -config=ca-config.json \
+  -profile=kubernetes \
+  kube-proxy-csr.json | cfssljson -bare kube-proxy
+
+echo "Generating kube-apiserver cert..."
+
+cat > kubernetes-csr.json <<EOF
+{
+  "CN": "kubernetes",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "Portland",
+      "O": "Kubernetes",
+      "OU": "Kubernetes The Hard Way",
+      "ST": "Oregon"
+    }
+  ]
+}
+EOF
+
+echo "IPs: ${IPS},127.0.0.1,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.default.svc.cluster.local"
+cfssl gencert \
+  -ca=ca.pem \
+  -ca-key=ca-key.pem \
+  -config=ca-config.json \
+  -hostname=${IPS},127.0.0.1,kubernetes.default,kubernetes.default.svc,kubernetes.default.svc.cluster,kubernetes.default.svc.cluster.local \
+  -profile=kubernetes \
+  kubernetes-csr.json | cfssljson -bare kubernetes
+
+cd ../

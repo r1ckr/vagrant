@@ -1,0 +1,59 @@
+#cloud-config
+
+coreos:
+  update:
+    reboot-strategy: "off"
+  units:
+  - name: coreroller-db.service
+    command: start
+    content: |
+      [Unit]
+      Description=Postgres database for Coreroller
+      After=docker.service
+      Requires=docker.service
+      [Service]
+      Restart=on-failure
+      RestartSec=20
+      TimeoutStartSec=60
+      RemainAfterExit=yes
+      ExecStartPre=-/usr/bin/docker stop coreroller-db
+      ExecStartPre=-/usr/bin/docker rm coreroller-db
+      ExecStartPre=/usr/bin/docker pull coreroller/postgres:1.0.5
+      ExecStart=/usr/bin/docker run --name coreroller-db \
+          --net=host \
+          -p 5432:5432 \
+          -v /coreroller-db-data:/coreroller/data \
+          coreroller/postgres
+      ExecStop=/usr/bin/docker stop coreroller-db
+      ExecStop=/usr/bin/docker rm coreroller-db
+      [Install]
+      WantedBy=multi-user.target
+  - name: coreroller.service
+    command: start
+    content: |
+      [Unit]
+      Description=Coreroller
+      After=coreroller-db.service
+      Requires=coreroller-db.service
+      [Service]
+      Restart=on-failure
+      RestartSec=20
+      TimeoutStartSec=60
+      RemainAfterExit=yes
+      ExecStartPre=-/usr/bin/docker stop coreroller
+      ExecStartPre=-/usr/bin/docker rm coreroller
+      ExecStartPre=/usr/bin/docker pull coreroller/rollerd:1.0.5
+      ExecStart=/usr/bin/docker run --name coreroller \
+          --net=host \
+          -e COREROLLER_DB_URL="postgres://postgres@127.0.0.1:5432/coreroller?sslmode=disable" \
+          -v /coreos-packages:/coreos-packages \
+          coreroller/rollerd \
+          /coreroller/rollerd \
+          -http-static-dir=/coreroller/static \
+          -host-coreos-packages=true \
+          -coreos-packages-path=/coreos-packages \
+          -coreroller-url=http://192.168.47.5:8000
+      ExecStop=/usr/bin/docker stop coreroller
+      ExecStop=/usr/bin/docker rm coreroller
+      [Install]
+      WantedBy=multi-user.target

@@ -1,0 +1,81 @@
+#cloud-config
+write_files:
+  - path: "/root/download-kube.sh"
+    permissions: "0755"
+    owner: "root"
+    content: |
+      __DOWNLOAD_KUBE__
+  - path: "/root/.kube/config"
+    permissions: 0644
+    owner: root
+    content: |
+      __KUBECONFIG__
+  - path: "/var/lib/kube-proxy/config"
+    permissions: 0644
+    owner: root
+    content: |
+      __PROXYCONFIG__
+  - path: "/srv/kubernetes/token-auth-file.csv"
+    permissions: 0644
+    owner: root
+    content: |
+      __TOKEN_FILE__
+coreos:
+  update:
+    reboot-strategy: "etcd-lock"
+    group: stable
+    server: __COREOS_UPDATE_URL__
+  etcd2:
+    proxy: on
+    initial-cluster: __INITIAL_ETCD_CLUSTER__
+    listen-client-urls: http://0.0.0.0:2379
+  locksmith:
+    group: "worker"
+    window-start: Mon 9:00
+    window-length: 1h
+  units:
+    - name: etcd2.service
+      command: start
+    - name: flanneld.service
+      command: start
+    - name: kube-etcd.service
+      command: start
+      content: |
+        __KUBE_ETCD_DEFINITION__
+    - name: download-kube.service
+      command: start
+      content: |
+        [Unit]
+        Description=Download Kubernetes binaries
+        Documentation=https://github.com/kubernetes/kubernetes
+        After=docker.service
+        Requires=docker.service
+        [Service]
+        Environment=K8S_VERSION=__K8S_VERSION__
+        Environment=KUBE_API_LB_URL=__KUBE_API_LB_URL__
+        Environment=TOKEN=__TOKEN__
+        Environment=IS_MASTER=true
+        Type=oneshot
+        ExecStart=/usr/bin/sh -c "if [ ! -d /root/kubernetes ]; then cd /root && /root/download-kube.sh; fi"
+        RemainAfterExit=yes
+        RestartSec=10
+    - name: kube-apiserver.service
+      command: start
+      content: |
+        __KUBE_API_SERVER_DEFINITION__
+    - name: kube-controller-manager.service
+      command: start
+      content: |
+        __KUBE_CONTROLLER_MANAGER_DEFINITION__
+    - name: kube-scheduler.service
+      command: start
+      content: |
+        __KUBE_SCHEDULER_DEFINITION__
+    - name: kubelet.service
+      command: start
+      content: |
+        __KUBELET_DEFINITION__
+    - name: kube-proxy.service
+      command: start
+      content: |
+        __KUBE_PROXY_DEFINITION__

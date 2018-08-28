@@ -1,0 +1,27 @@
+[Unit]
+        Description=Kubernetes kubelet
+        Documentation=https://github.com/kubernetes/kubernetes
+        After=download-kube.service
+        Requires=download-kube.service
+        [Service]
+        ExecStartPre=/usr/bin/mkdir -p /etc/kubernetes/manifests
+        ExecStartPre=/usr/bin/mkdir -p /var/log/containers
+        ExecStartPre=/usr/bin/mkdir -p /var/lib/kubelet/
+        ExecStart=/bin/bash -c '/opt/bin/kubelet \
+            --hostname-override=$private_ipv4 \
+            --node-ip=$private_ipv4 \
+            --healthz-bind-address=0.0.0.0 \
+            --kubeconfig=/var/lib/kubelet/kubeconfig \
+            --cluster-dns=__DNS_SERVICE_IP__ \
+            --cluster-domain=cluster.local \
+            --pod-manifest-path=/etc/kubernetes/manifests \
+            --node-labels=kubernetes.io/role="__NODE_ROLE__" \
+            --allow-privileged=true \
+            --register-node=true \
+            --bootstrap-kubeconfig="/var/lib/kubelet/bootstrap.kubeconfig" \
+            --feature-gates=RotateKubeletClientCertificate=true,RotateKubeletServerCertificate=true \
+            --v=2'
+        Restart=always
+        RestartSec=10
+        [Install]
+        WantedBy=multi-user.target

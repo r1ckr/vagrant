@@ -1,0 +1,52 @@
+#cloud-config
+write_files:
+  - path: "/root/download-kube.sh"
+    permissions: "0755"
+    owner: "root"
+    content: |
+      __DOWNLOAD_KUBE__
+  - path: "/var/lib/kube-proxy/config"
+    permissions: 0644
+    owner: root
+    content: |
+      __PROXYCONFIG__
+coreos:
+  update:
+    reboot-strategy: "etcd-lock"
+    group: stable
+    server: __COREOS_UPDATE_URL__
+  etcd2:
+    proxy: on
+    initial-cluster: __INITIAL_ETCD_CLUSTER__
+    listen-client-urls: http://0.0.0.0:2379
+  locksmith:
+    group: "worker"
+  units:
+    - name: etcd2.service
+      command: start
+    - name: flanneld.service
+      command: start
+    - name: download-kube.service
+      command: start
+      content: |
+        [Unit]
+        Description=Download Kubernetes binaries
+        Documentation=https://github.com/kubernetes/kubernetes
+        After=docker.service
+        Requires=docker.service
+        [Service]
+        Environment=K8S_VERSION=__K8S_VERSION__
+        Environment=KUBE_API_LB_URL=__KUBE_API_LB_URL__
+        Environment=TOKEN=__TOKEN__
+        Type=oneshot
+        ExecStart=/usr/bin/sh -c "if [ ! -d /root/kubernetes ]; then cd /root && /root/download-kube.sh; fi"
+        RemainAfterExit=yes
+        RestartSec=10
+    - name: kubelet.service
+      command: start
+      content: |
+        __KUBELET_DEFINITION__
+    - name: kube-proxy.service
+      command: start
+      content: |
+        __KUBE_PROXY_DEFINITION__
