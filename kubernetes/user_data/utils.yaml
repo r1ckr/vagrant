@@ -28,7 +28,7 @@ coreos:
       ExecStop=/usr/bin/docker rm coreroller-db
       [Install]
       WantedBy=multi-user.target
-  - name: coreroller-db.service
+  - name: coreroller.service
     command: start
     content: |
       [Unit]
