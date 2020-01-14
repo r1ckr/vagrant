@@ -56,5 +56,20 @@ runPerformance 30 ${appUrl} >> ${logFile}
 runPerformance 40 ${appUrl} >> ${logFile}
 runPerformance 50 ${appUrl} >> ${logFile}
 
+waitToCoolDown
+
+echo "######### Running Express GW performance... ######### "
+logFile="eg.log"
+appUrl="http://127.0.0.1:8888/"
+date > ${logFile}
+runPerformance 1 ${appUrl} >> ${logFile}
+runPerformance 5 ${appUrl} >> ${logFile}
+runPerformance 10 ${appUrl} >> ${logFile}
+runPerformance 20 ${appUrl} >> ${logFile}
+runPerformance 30 ${appUrl} >> ${logFile}
+runPerformance 40 ${appUrl} >> ${logFile}
+runPerformance 50 ${appUrl} >> ${logFile}
+
+
 
 

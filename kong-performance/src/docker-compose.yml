@@ -29,9 +29,21 @@ services:
       KONG_DATABASE: 'off'
       KONG_DECLARATIVE_CONFIG: '/etc/kong/kong.yml'
 
+  express-gateway:
+    image: express-gateway:latest
+    mem_limit: 128m
+    ports:
+      - 8888:8888
+      - 9876:9876
+    networks:
+      - frontend
+    volumes:
+      - /src/gateway.config.yml:/var/lib/eg/gateway.config.yml:ro
+    restart: always
+
   nginx:
     image: nginx:latest
-    mem_limit: 256m
+    mem_limit: 128m
     ports:
       - 9999:9999
     networks:
@@ -43,7 +55,6 @@ services:
 
 networks:
   frontend:
-  backend:
 
 volumes:
   db-data:
