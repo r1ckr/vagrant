@@ -1,0 +1,9 @@
+_format_version: "1.1"
+
+services:
+  - name: echo-service
+    url: http://hellohttp:7777
+    routes:
+      - name: test-route
+        paths:
+          - /test

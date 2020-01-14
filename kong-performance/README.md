@@ -23,14 +23,6 @@ docker-compose up -d
 ```
 This compose will run all the necessary apps
 
-### Create the Kong API
-```
-curl -i -X POST http://localhost:8001/apis/ \
-  --data 'name=test-api' \
-  --data 'uris=/test' \
-  --data 'upstream_url=http://hellohttp:7777/'
-```
-
 ## Run the tests
 ```bash
 ./run-tests.sh
@@ -38,7 +30,7 @@ curl -i -X POST http://localhost:8001/apis/ \
 
 ## Parse the results
 ```bash
-./extract-results
+./extract-results.sh
 ```
 Then print only the data to plot:
 ```bash

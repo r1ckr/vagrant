@@ -10,13 +10,6 @@ services:
       SERVER_TOMCAT_ACCESSLOG_ENABLED: "true"
       JAVA_TOOL_OPTIONS: "-Xmx512m"
 
-  kongdatabase:
-    image: cassandra:3
-    volumes:
-      - db-data:/var/lib/cassandra
-    networks:
-      - backend
-
   kong:
     image: kong:latest
     ports:
@@ -28,13 +21,12 @@ services:
       - 7946:7946/udp
     networks:
       - frontend
-      - backend
-    depends_on:
-      - kongdatabase
+    volumes:
+      - /src/kong.yml:/etc/kong/kong.yml:ro
     restart: always
     environment:
-      KONG_DATABASE: 'cassandra'
-      KONG_CASSANDRA_CONTACT_POINTS: 'kongdatabase'
+      KONG_DATABASE: 'off'
+      KONG_DECLARATIVE_CONFIG: '/etc/kong/kong.yml'
 
   nginx:
     image: nginx:latest
