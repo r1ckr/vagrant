@@ -1,12 +1,7 @@
 Vagrant.configure("2") do |config|
-  #This is to get rid of the error: stdin: is not a tty
-  config.ssh.shell = "bash -c 'BASH_ENV=/etc/profile exec bash'"
-  config.ssh.username = "ubuntu"
-  config.ssh.insert_key = true
-  config.ssh.forward_agent = true
 
   #Image name
-  config.vm.box = "ubuntu/xenial64"
+  config.vm.box = "ubuntu/bionic64"
 
   #Network
   config.vm.network "private_network", ip: "99.99.99.99"
