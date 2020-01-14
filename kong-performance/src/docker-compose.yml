@@ -12,6 +12,7 @@ services:
 
   kong:
     image: kong:latest
+    mem_limit: 256m
     ports:
       - 8000:8000
       - 8443:8443
