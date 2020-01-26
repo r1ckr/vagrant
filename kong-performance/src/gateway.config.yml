@@ -5,7 +5,6 @@ admin:
   host: localhost
 apiEndpoints:
   api:
-    host: localhost
     paths: '/'
 serviceEndpoints:
   httpbin:

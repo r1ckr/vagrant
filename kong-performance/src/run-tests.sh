@@ -1,75 +1,47 @@
 #!/usr/bin/env bash
 
-runPerformance(){
+heyInvoke(){
   parallelism=$1
   url=$2
   totalRequests=$((${parallelism}*10))
-#  for i in {1..3}
-#  do
-    ab -n ${totalRequests} -c ${parallelism} ${url}
-#  done
+  echo "Concurrency Level: ${parallelism}"
+  hey -n ${totalRequests} -c ${parallelism} ${url}
+
 }
 
 waitToCoolDown(){
-  sleepTimeSeconds=10
+  sleepTimeSeconds=5
   echo "Sleeping for ${sleepTimeSeconds} seconds to cool down..."
   sleep ${sleepTimeSeconds}
 }
 
-echo "######### Running App performance... ######### "
-logFile="app.log"
-appUrl="http://127.0.0.1:7777/"
-date > ${logFile}
-runPerformance 1 ${appUrl} >> ${logFile}
-runPerformance 5 ${appUrl} >> ${logFile}
-runPerformance 10 ${appUrl} >> ${logFile}
-runPerformance 20 ${appUrl} >> ${logFile}
-runPerformance 30 ${appUrl} >> ${logFile}
-runPerformance 40 ${appUrl} >> ${logFile}
-runPerformance 50 ${appUrl} >> ${logFile}
+runPerformance(){
+  logFile=$1
+  appUrl=$2
+  date > ${logFile}
+  heyInvoke 10 ${appUrl} >> ${logFile}
+  heyInvoke 50 ${appUrl} >> ${logFile}
+  heyInvoke 100 ${appUrl} >> ${logFile}
+  heyInvoke 200 ${appUrl} >> ${logFile}
+  heyInvoke 300 ${appUrl} >> ${logFile}
+  heyInvoke 400 ${appUrl} >> ${logFile}
+  heyInvoke 500 ${appUrl} >> ${logFile}
+}
 
+echo "######### Running App performance... ######### "
+runPerformance "app.log" "http://127.0.0.1:7777/"
 waitToCoolDown
 
 echo "######### Running NGINX performance... ######### "
-logFile="nginx.log"
-appUrl="http://127.0.0.1:9999/"
-date > ${logFile}
-runPerformance 1 ${appUrl} >> ${logFile}
-runPerformance 5 ${appUrl} >> ${logFile}
-runPerformance 10 ${appUrl} >> ${logFile}
-runPerformance 20 ${appUrl} >> ${logFile}
-runPerformance 30 ${appUrl} >> ${logFile}
-runPerformance 40 ${appUrl} >> ${logFile}
-runPerformance 50 ${appUrl} >> ${logFile}
-
+runPerformance "nginx.log" "http://127.0.0.1:9999/"
 waitToCoolDown
 
 echo "######### Running Kong performance... ######### "
-logFile="kong.log"
-appUrl="http://127.0.0.1:8000/test/"
-date > ${logFile}
-runPerformance 1 ${appUrl} >> ${logFile}
-runPerformance 5 ${appUrl} >> ${logFile}
-runPerformance 10 ${appUrl} >> ${logFile}
-runPerformance 20 ${appUrl} >> ${logFile}
-runPerformance 30 ${appUrl} >> ${logFile}
-runPerformance 40 ${appUrl} >> ${logFile}
-runPerformance 50 ${appUrl} >> ${logFile}
-
+runPerformance "kong.log" "http://127.0.0.1:8000/test/"
 waitToCoolDown
 
 echo "######### Running Express GW performance... ######### "
-logFile="eg.log"
-appUrl="http://127.0.0.1:8888/"
-date > ${logFile}
-runPerformance 1 ${appUrl} >> ${logFile}
-runPerformance 5 ${appUrl} >> ${logFile}
-runPerformance 10 ${appUrl} >> ${logFile}
-runPerformance 20 ${appUrl} >> ${logFile}
-runPerformance 30 ${appUrl} >> ${logFile}
-runPerformance 40 ${appUrl} >> ${logFile}
-runPerformance 50 ${appUrl} >> ${logFile}
-
+runPerformance "express-gateway.log" "http://127.0.0.1:8888/"
 
 
 

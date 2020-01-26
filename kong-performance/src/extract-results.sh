@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-DATA="Requests per second"
+DATA="Requests/sec"
 
 files=$1
 
@@ -11,5 +11,5 @@ fi
 for file in ${files}
 do
   echo "Results in ${file}:"
-  grep -A10 "Concurrency Level" ${file} | grep -E "Concurrency|${DATA}" | awk '!x[$0]++'
+  grep -A10 "Concurrency Level:" ${file} | grep -E "Concurrency|${DATA}" | awk '!x[$0]++'
 done
