@@ -32,19 +32,19 @@ This compose will run all the necessary apps
 ```bash
 ./extract-results.sh
 ```
-Then print only the data to plot:
+
+## Run the graph:
+Back in the host machine, run the node app to see the graph:
 ```bash
-./extract-results.sh | grep -v Concu | awk -F " " '{print $4}'
+node server.js
 ```
 
 ## Manual Docker commands
 If you prefer to start manually each container, use the commands below
 
-### Start the Spring App
+### Start the Hello App
 ```
-docker run -d --name spring-hello \
--e SERVER_TOMCAT_ACCESSLOG_ENABLED=true \
--e JAVA_TOOL_OPTIONS="-Xmx512m" \
+docker run -d --name hello \
 -p 7777:7777 \
 r1ckr/http-hello
 ```
@@ -55,18 +55,14 @@ curl -i localhost:7777
 
 ### Run Kong
 ```bash
-# Kong Database
-docker run -d --name kong-database \
-    --restart always \
-    -p 9042:9042 \
-    cassandra:3
-
 # Kong instance
 docker run -d --name kong \
-    --link kong-database:kong-database \
     --restart always \
-    -e "KONG_DATABASE=cassandra" \
-    -e "KONG_CASSANDRA_CONTACT_POINTS=kong-database" \
+    -e "KONG_DATABASE=off" \
+    -e "KONG_LOG_LEVEL=info" \
+    -e "KONG_ADMIN_LISTEN=0.0.0.0:8001, 0.0.0.0:8444 ssl" \
+    -e "KONG_DECLARATIVE_CONFIG=/etc/kong/kong.yml" \
+    -v $(pwd)/kong.yml:/etc/kong/kong.yml:ro \
     -p 8000:8000 \
     -p 8443:8443 \
     -p 8001:8001 \
@@ -75,22 +71,10 @@ docker run -d --name kong \
     -p 7946:7946/udp \
     kong:latest
 ```
-### Create the API
-```
-curl -i -X POST http://localhost:8001/apis/ \
-  --data 'name=test-api' \
-  --data 'uris=/test' \
-  --data 'upstream_url=http://172.17.0.2:7777/'
-```
 #### Test the API
 ```
 curl -i localhost:8000/test
 ```
-### Delete the API when needed
-```
-curl -i -X DELETE http://localhost:8001/apis/test-api
-```
-
 
 ### Start an NGINX pointing to the Spring App
 Create the nginx configuration: 

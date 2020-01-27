@@ -1,0 +1,30 @@
+{
+  "name": "api-gw-performance",
+  "version": "1.0.0",
+  "description": "Project to test multiple API Gateways",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/r1ckr/vagrant.git"
+  },
+  "keywords": [
+    "perf",
+    "kong",
+    "nginx",
+    "devops"
+  ],
+  "author": "Richard Pablo",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/r1ckr/vagrant/issues"
+  },
+  "homepage": "https://github.com/r1ckr/vagrant#readme",
+  "dependencies": {
+    "chart.js": "^2.9.3",
+    "chartjs-node-canvas": "^2.4.1",
+    "colors": "^1.4.0"
+  }
+}

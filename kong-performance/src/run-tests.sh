@@ -3,7 +3,7 @@
 heyInvoke(){
   parallelism=$1
   url=$2
-  totalRequests=$((${parallelism}*10))
+  totalRequests=$((${parallelism}*100))
   echo "Concurrency Level: ${parallelism}"
   hey -n ${totalRequests} -c ${parallelism} ${url}
 
@@ -28,20 +28,21 @@ runPerformance(){
   heyInvoke 500 ${appUrl} >> ${logFile}
 }
 
+mkdir -p results
 echo "######### Running App performance... ######### "
-runPerformance "app.log" "http://127.0.0.1:7777/"
+runPerformance "results/app.log" "http://127.0.0.1:7777/"
 waitToCoolDown
 
 echo "######### Running NGINX performance... ######### "
-runPerformance "nginx.log" "http://127.0.0.1:9999/"
+runPerformance "results/nginx.log" "http://127.0.0.1:9999/"
 waitToCoolDown
 
 echo "######### Running Kong performance... ######### "
-runPerformance "kong.log" "http://127.0.0.1:8000/test/"
+runPerformance "results/kong.log" "http://127.0.0.1:8000/test/"
 waitToCoolDown
 
 echo "######### Running Express GW performance... ######### "
-runPerformance "express-gateway.log" "http://127.0.0.1:8888/"
+runPerformance "results/express-gateway.log" "http://127.0.0.1:8888/"
 
 
 

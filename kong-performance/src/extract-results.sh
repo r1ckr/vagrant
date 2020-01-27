@@ -5,11 +5,12 @@ DATA="Requests/sec"
 files=$1
 
 if [ "${files}" == "" ]; then
-  files="./*.log"
+  files="./results/*.log"
 fi
 
 for file in ${files}
 do
   echo "Results in ${file}:"
-  grep -A10 "Concurrency Level:" ${file} | grep -E "Concurrency|${DATA}" | awk '!x[$0]++'
+  grep -A10 "Concurrency Level:" ${file} | grep -E "${DATA}" | awk -F ':' '{print $2}' | sed 's/[[:space:]]//g' | jq -R -s -c 'split("\n")' >  ${file}.json
+  echo ""
 done

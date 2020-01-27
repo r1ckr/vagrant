@@ -1,0 +1,155 @@
+
+<!doctype html>
+<html>
+
+<head>
+    <title>Line Chart</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.min.js"></script>
+    <script src="https://www.chartjs.org/samples/latest/utils.js"></script>
+    <style>
+	canvas{
+		-moz-user-select: none;
+		-webkit-user-select: none;
+		-ms-user-select: none;
+	}
+	</style>
+</head>
+
+<body>
+<div style="width:75%;">
+    <canvas id="canvas"></canvas>
+</div>
+<br>
+<br>
+<script>
+		var X_AXIS = ['10', '50', '100', '200', '300', '400', '500'];
+		var config = {
+			type: 'line',
+			data: {
+				labels: ['10', '50', '100', '200', '300', '400', '500'],
+				datasets: [{
+					label: 'App',
+					backgroundColor: window.chartColors.black,
+					borderColor: window.chartColors.black,
+					data: {{appData}},
+					fill: false,
+				}, {
+					label: 'NGINX',
+					fill: false,
+					backgroundColor: window.chartColors.blue,
+					borderColor: window.chartColors.blue,
+					data: {{nginxData}},
+				}, {
+					label: 'Kong',
+					fill: false,
+					backgroundColor: window.chartColors.green,
+					borderColor: window.chartColors.green,
+					data: {{kongData}},
+				}, {
+					label: 'Express Gateway',
+					fill: false,
+					backgroundColor: window.chartColors.orange,
+					borderColor: window.chartColors.orange,
+					data: {{expressGatewayData}},
+				}]
+			},
+			options: {
+				responsive: true,
+				title: {
+					display: true,
+					text: 'API Gateway Comparison'
+				},
+				tooltips: {
+					mode: 'index',
+					intersect: false,
+				},
+				hover: {
+					mode: 'nearest',
+					intersect: true
+				},
+				scales: {
+					xAxes: [{
+						display: true,
+						scaleLabel: {
+							display: true,
+							labelString: 'Concurrency'
+						}
+					}],
+					yAxes: [{
+						display: true,
+						scaleLabel: {
+							display: true,
+							labelString: 'Requests per second'
+						}
+					}]
+				}
+			}
+		};
+
+		window.onload = function() {
+			var ctx = document.getElementById('canvas').getContext('2d');
+			window.myLine = new Chart(ctx, config);
+		};
+
+		document.getElementById('randomizeData').addEventListener('click', function() {
+			config.data.datasets.forEach(function(dataset) {
+				dataset.data = dataset.data.map(function() {
+					return randomScalingFactor();
+				});
+
+			});
+
+			window.myLine.update();
+		});
+
+		var colorNames = Object.keys(window.chartColors);
+		document.getElementById('addDataset').addEventListener('click', function() {
+			var colorName = colorNames[config.data.datasets.length % colorNames.length];
+			var newColor = window.chartColors[colorName];
+			var newDataset = {
+				label: 'Dataset ' + config.data.datasets.length,
+				backgroundColor: newColor,
+				borderColor: newColor,
+				data: [],
+				fill: false
+			};
+
+			for (var index = 0; index < config.data.labels.length; ++index) {
+				newDataset.data.push(randomScalingFactor());
+			}
+
+			config.data.datasets.push(newDataset);
+			window.myLine.update();
+		});
+
+		document.getElementById('addData').addEventListener('click', function() {
+			if (config.data.datasets.length > 0) {
+				var month = X_AXIS[config.data.labels.length % X_AXIS.length];
+				config.data.labels.push(month);
+
+				config.data.datasets.forEach(function(dataset) {
+					dataset.data.push(randomScalingFactor());
+				});
+
+				window.myLine.update();
+			}
+		});
+
+		document.getElementById('removeDataset').addEventListener('click', function() {
+			config.data.datasets.splice(0, 1);
+			window.myLine.update();
+		});
+
+		document.getElementById('removeData').addEventListener('click', function() {
+			config.data.labels.splice(-1, 1); // remove the label first
+
+			config.data.datasets.forEach(function(dataset) {
+				dataset.data.pop();
+			});
+
+			window.myLine.update();
+		});
+	</script>
+</body>
+
+</html>
